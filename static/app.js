@@ -21,15 +21,12 @@ const state = {
   model: null,         // 上传的模特图 url（scene 层用）
   currentType: null,
   selected: {},        // 当前工作区：type -> url（纳入企划盘后清空）
-  jobId: null, timer: null,
   variation: null,     // 本款演变记录（生成即归属本款，纳入企划盘时自动带上）
-  varJobId: null, varTimer: null,
   recog: null,          // 客观识别结果（自由格式，不套用数据库）
   planSkus: [],         // 企划盘：[{ sku, colorZh, colorEn, direction, retailer, selected, variation }]
   timing: { evolve_sec: 0, images_sec: 0 },  // 实测耗时累计 → 导出尾页「耗时拆解」
   cover: null,          // deck 封面 url（从氛围图挑的或再生成的）→ 导出 P01
   coverCandidates: [],  // 「再生成」出的封面候选
-  coverJobId: null, coverTimer: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -318,76 +315,93 @@ function selectVariant(url) {
   renderTrack(); renderSelectedStrip(); renderWorkState();
 }
 
+// ---------- 公共：提交后台任务 + 轮询结果（出图 / 演变 / 封面三处共用，家规见 CLAUDE.md） ----------
+// opts: { url, body, btn, status, loading, waiting, doneLabel, onElapsed(sec), onDone(res, statusEl) }
+// 后端断开/双开时状态查询会失败：连续 5 次（约 10 秒）仍不通就明确报错，不再无限转圈
+const POLL_MS = 2000, POLL_MAX_FAILS = 5;
+
+async function runJob(opts) {
+  const btn = $(opts.btn), st = $(opts.status);
+  btn.disabled = true;
+  st.className = "gen-status loading";
+  st.textContent = opts.loading;
+  let res;
+  try {
+    res = await api(opts.url, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(opts.body),
+    });
+  } catch (err) {
+    btn.disabled = false;
+    st.className = "gen-status error";
+    st.textContent = "提交失败（后端未响应）：" + err.message;
+    return;
+  }
+  const pollOnce = async (jobId, fails) => {
+    let r;
+    try {
+      r = await api("/api/status/" + jobId);
+      fails = 0;
+    } catch (err) {
+      if (++fails < POLL_MAX_FAILS) { setTimeout(() => pollOnce(jobId, fails), POLL_MS); return; }
+      btn.disabled = false;
+      st.className = "gen-status error";
+      st.textContent = "查询生成状态连续失败（后端可能断开或重启了）：" + err.message;
+      return;
+    }
+    if (!r.done) {
+      st.textContent = opts.waiting || "生成中…请稍候";
+      setTimeout(() => pollOnce(jobId, fails), POLL_MS);
+      return;
+    }
+    btn.disabled = false;
+    if (r.error) {
+      st.className = "gen-status error";
+      st.textContent = (opts.doneLabel || "生成") + "失败：" + r.error;
+      return;
+    }
+    if (r.elapsed && opts.onElapsed) { opts.onElapsed(r.elapsed); renderWorkState(); }
+    st.className = "gen-status";
+    opts.onDone(r, st);
+  };
+  pollOnce(res.job_id, 0);
+}
+
 // ---------- 生成（一边做一边看：生成 → 看图 → 人工点选） ----------
 async function generate() {
   const sku = effectiveSku();
   const colorEn = state.recog ? state.recog.color_en : $("color").value;
   const sceneEn = state.recog ? state.recog.scene_en : $("scene").value;
-  const body = {
-    target: state.currentType,
-    sku: sku,
-    direction: $("direction").value,
-    anchor: state.anchor,
-    model: SCENE_TYPES.includes(state.currentType) ? state.model : null,
-    color_en: colorEn,
-    scene_en: sceneEn,
-    retailer: $("retailer").value,
-    count: parseInt($("count").value, 10),
-    style_hint: ($("planStyle") && $("planStyle").value.trim()) || "",
-  };
-  $("genStatus").className = "gen-status loading";
-  $("genStatus").textContent = "提交生成中…（约 20–60 秒/张）";
-  $("btnGenerate").disabled = true;
-  let res;
-  try {
-    res = await api("/api/generate", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-    });
-  } catch (err) {
-    $("btnGenerate").disabled = false;
-    $("genStatus").className = "gen-status error";
-    $("genStatus").textContent = "提交失败（后端未响应）：" + err.message;
-    return;
-  }
-  state.jobId = res.job_id;
-  poll();
-}
-
-async function poll() {
-  // 后端断开/双开时状态查询会失败：连续 5 次（约 10 秒）仍不通就明确报错，不再无限转圈
-  let res;
-  try {
-    res = await api("/api/status/" + state.jobId);
-    state.pollFails = 0;
-  } catch (err) {
-    state.pollFails = (state.pollFails || 0) + 1;
-    if (state.pollFails < 5) { state.timer = setTimeout(poll, 2000); return; }
-    $("btnGenerate").disabled = false;
-    $("genStatus").className = "gen-status error";
-    $("genStatus").textContent = "查询生成状态连续失败（后端可能断开或重启了）：" + err.message;
-    return;
-  }
-  if (res.done) {
-    $("btnGenerate").disabled = false;
-    if (res.error) {
-      $("genStatus").className = "gen-status error";
-      $("genStatus").textContent = "生成失败：" + res.error;
-      return;
-    }
-    $("genStatus").className = "gen-status";
-    const tookTxt = res.elapsed ? `（用时 ${res.elapsed} 秒）` : "";
-    if (res.elapsed) { state.timing.images_sec += res.elapsed; renderWorkState(); }
-    $("genStatus").textContent = res.no_ref
-      ? `生成完成${tookTxt}（⚠️ 本次无原图参考，按文字推断生成，面料/颜色可能与实物不符）：`
-      : `生成完成${tookTxt}，请在下方点选 1 张：`;
-    state.variantType = state.currentType;
-    state.variants = res.images;
-    $("resultPanel").hidden = false;
-    renderVariants(res.images);
-  } else {
-    $("genStatus").textContent = "生成中…请稍候";
-    state.timer = setTimeout(poll, 2000);
-  }
+  runJob({
+    url: "/api/generate",
+    body: {
+      target: state.currentType,
+      sku: sku,
+      direction: $("direction").value,
+      anchor: state.anchor,
+      model: SCENE_TYPES.includes(state.currentType) ? state.model : null,
+      color_en: colorEn,
+      scene_en: sceneEn,
+      retailer: $("retailer").value,
+      count: parseInt($("count").value, 10),
+      style_hint: ($("planStyle") && $("planStyle").value.trim()) || "",
+    },
+    btn: "btnGenerate", status: "genStatus",
+    loading: "提交生成中…（约 20–60 秒/张）",
+    waiting: "生成中…请稍候",
+    doneLabel: "生成",
+    onElapsed: (sec) => { state.timing.images_sec += sec; },
+    onDone: (r, st) => {
+      const tookTxt = r.elapsed ? `（用时 ${r.elapsed} 秒）` : "";
+      st.textContent = r.no_ref
+        ? `生成完成${tookTxt}（⚠️ 本次无原图参考，按文字推断生成，面料/颜色可能与实物不符）：`
+        : `生成完成${tookTxt}，请在下方点选 1 张：`;
+      state.variantType = state.currentType;
+      state.variants = r.images;
+      $("resultPanel").hidden = false;
+      renderVariants(r.images);
+    },
+  });
 }
 
 // ---------- 演变（出相似款）----------
@@ -412,67 +426,31 @@ function discardVariation() {
 
 async function doVariation() {
   if (!state.anchor) { $("varStatus").textContent = "请先在「① 起盘」选/传一张畅销款参考图"; return; }
-  const sku = effectiveSku();
-  const colorEn = state.recog ? state.recog.color_en : $("color").value;
-  const body = {
-    sku: sku,
-    direction: $("direction").value,
-    anchor: state.anchor,
-    axis: $("varAxis").value,
-    change: $("varChange").value.trim(),
-    color_en: colorEn,
-  };
-  $("varStatus").className = "gen-status loading";
-  $("varStatus").textContent = "提交演变生成中…（约 20–60 秒）";
-  $("btnVariation").disabled = true;
-  let res;
-  try {
-    res = await api("/api/variation", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-    });
-  } catch (err) {
-    $("btnVariation").disabled = false;
-    $("varStatus").className = "gen-status error";
-    $("varStatus").textContent = "提交失败（后端未响应）：" + err.message;
-    return;
-  }
-  state.varJobId = res.job_id;
-  pollVariation();
-}
-
-async function pollVariation() {
-  let res;
-  try {
-    res = await api("/api/status/" + state.varJobId);
-    state.varPollFails = 0;
-  } catch (err) {
-    state.varPollFails = (state.varPollFails || 0) + 1;
-    if (state.varPollFails < 5) { state.varTimer = setTimeout(pollVariation, 2000); return; }
-    $("btnVariation").disabled = false;
-    $("varStatus").className = "gen-status error";
-    $("varStatus").textContent = "查询演变状态连续失败（后端可能断开或重启了）：" + err.message;
-    return;
-  }
-  if (res.done) {
-    $("btnVariation").disabled = false;
-    if (res.error) {
-      $("varStatus").className = "gen-status error";
-      $("varStatus").textContent = "演变生成失败：" + res.error;
-      return;
-    }
-    $("varStatus").className = "gen-status";
-    if (res.elapsed) { state.timing.evolve_sec += res.elapsed; renderWorkState(); }
-    $("varStatus").textContent = `演变生成完成${res.elapsed ? `（用时 ${res.elapsed} 秒）` : ""}，已生成 before/after 对比`;
-    renderVariationCompare({
-      before: state.anchor,
-      after: res.images[0],
+  runJob({
+    url: "/api/variation",
+    body: {
+      sku: effectiveSku(),
+      direction: $("direction").value,
+      anchor: state.anchor,
       axis: $("varAxis").value,
       change: $("varChange").value.trim(),
-    });
-  } else {
-    $("varStatus").textContent = "演变生成中…请稍候";
-    state.varTimer = setTimeout(pollVariation, 2000);
-  }
+      color_en: state.recog ? state.recog.color_en : $("color").value,
+    },
+    btn: "btnVariation", status: "varStatus",
+    loading: "提交演变生成中…（约 20–60 秒）",
+    waiting: "演变生成中…请稍候",
+    doneLabel: "演变生成",
+    onElapsed: (sec) => { state.timing.evolve_sec += sec; },
+    onDone: (r, st) => {
+      st.textContent = `演变生成完成${r.elapsed ? `（用时 ${r.elapsed} 秒）` : ""}，已生成 before/after 对比`;
+      renderVariationCompare({
+        before: state.anchor,
+        after: r.images[0],
+        axis: $("varAxis").value,
+        change: $("varChange").value.trim(),
+      });
+    },
+  });
 }
 
 // ---------- 企划盘：纳入 / 渲染 / 重开 / 移除 ----------
@@ -694,59 +672,24 @@ function renderCover() {
 async function genCover() {
   const pool = coverRefPool();
   if (!pool.length) return;
-  const refs = pool.map(p => p.url);
-  const body = {
-    direction: $("direction").value,
-    style_hint: ($("planStyle") && $("planStyle").value.trim()) || "",
-    refs: refs,
-    skus: state.planSkus.map(e => ({ name: e.sku.name, en: e.sku.en })),
-  };
-  $("coverStatus").className = "gen-status loading";
-  $("coverStatus").textContent = "封面生成中…（约 20–60 秒）";
-  $("btnGenCover").disabled = true;
-  let res;
-  try {
-    res = await api("/api/cover", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-    });
-  } catch (err) {
-    $("btnGenCover").disabled = false;
-    $("coverStatus").className = "gen-status error";
-    $("coverStatus").textContent = "提交失败（后端未响应）：" + err.message;
-    return;
-  }
-  state.coverJobId = res.job_id;
-  pollCover();
-}
-
-async function pollCover() {
-  let res;
-  try {
-    res = await api("/api/status/" + state.coverJobId);
-    state.coverPollFails = 0;
-  } catch (err) {
-    state.coverPollFails = (state.coverPollFails || 0) + 1;
-    if (state.coverPollFails < 5) { state.coverTimer = setTimeout(pollCover, 2000); return; }
-    $("btnGenCover").disabled = false;
-    $("coverStatus").className = "gen-status error";
-    $("coverStatus").textContent = "查询封面状态连续失败（后端可能断开或重启了）：" + err.message;
-    return;
-  }
-  if (res.done) {
-    $("btnGenCover").disabled = false;
-    if (res.error) {
-      $("coverStatus").className = "gen-status error";
-      $("coverStatus").textContent = "封面生成失败：" + res.error;
-      return;
-    }
-    $("coverStatus").className = "gen-status";
-    $("coverStatus").textContent = "封面候选已出，点上面一张设为封面";
-    state.coverCandidates.push(...res.images);
-    renderCover();
-  } else {
-    $("coverStatus").textContent = "封面生成中…请稍候";
-    state.coverTimer = setTimeout(pollCover, 2000);
-  }
+  runJob({
+    url: "/api/cover",
+    body: {
+      direction: $("direction").value,
+      style_hint: ($("planStyle") && $("planStyle").value.trim()) || "",
+      refs: pool.map(p => p.url),
+      skus: state.planSkus.map(e => ({ name: e.sku.name, en: e.sku.en })),
+    },
+    btn: "btnGenCover", status: "coverStatus",
+    loading: "封面生成中…（约 20–60 秒）",
+    waiting: "封面生成中…请稍候",
+    doneLabel: "封面生成",
+    onDone: (r, st) => {
+      st.textContent = "封面候选已出，点上面一张设为封面";
+      state.coverCandidates.push(...r.images);
+      renderCover();
+    },
+  });
 }
 
 // ---------- 导出（企划盘多款） ----------
@@ -812,7 +755,7 @@ function loadSample() {
 
 function reset() {
   Object.assign(state, { anchor: null, anchorType: "white_bg", model: null, currentType: null,
-    selected: {}, jobId: null, variants: [], variation: null, recog: null,
+    selected: {}, variants: [], variation: null, recog: null,
     planSkus: [], timing: { evolve_sec: 0, images_sec: 0 },
     cover: null, coverCandidates: [] });
   updateAnchorPreview(null);
