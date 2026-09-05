@@ -18,7 +18,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from core import IMAGE_TYPES, GARMENT_STRUCTURES, ensure_api_key, KEY_HELP  # noqa: E402
+from core import IMAGE_TYPES, GARMENT_STRUCTURES, DIRECTIONS, ensure_api_key, KEY_HELP  # noqa: E402
 from qwen_client import img_to_base64, _http  # noqa: E402
 
 VL_API = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
@@ -85,7 +85,36 @@ _PROMPT = (
 )
 
 
-def recognize(anchor_path):
+def match_library_sku(sku_dict, direction_hint=None):
+    """识别出的自由格式"款式" → 匹配库内 SKU（directions.json）。
+
+    为什么：识别结果是自由格式，没有 composition/spec/price 等企划字段，逐款页
+    参数条会「待补充」。按 品类中文名/英文名 互含记分，命中（>=2 分）就把库内款
+    整个带回去——成分/规格/双价格/设计方向自动继承，颜色仍用识别值（图最准）。
+    同方向平分 +0.5，平手时优先当前方向。
+    """
+    name = (sku_dict.get("name") or "").strip()
+    en = (sku_dict.get("en") or "").strip().lower()
+    mat = (sku_dict.get("material_en") or "").strip().lower()
+    best, best_score = None, 0
+    for d, dv in DIRECTIONS.items():
+        for s in dv.get("skus", []):
+            score = 0.0
+            zh, sen = (s.get("name") or "").strip(), (s.get("en") or "").strip().lower()
+            if name and zh and (name in zh or zh in name):
+                score += 2
+            if en and sen and (en in sen or sen in en):
+                score += 2
+            if mat and mat in (s.get("material_en") or "").lower():
+                score += 1
+            if d == direction_hint:
+                score += 0.5
+            if score > best_score:
+                best, best_score = {"direction": d, "name": zh, "sku": s}, score
+    return best if best_score >= 2 else None
+
+
+def recognize(anchor_path, direction_hint=None):
     if not ensure_api_key():
         raise RuntimeError(KEY_HELP)
     key = os.environ["DASHSCOPE_API_KEY"]
@@ -149,6 +178,7 @@ def recognize(anchor_path):
         "image_type": image_type,
         "summary": data.get("summary") or "",
         "sku": sku,
+        "lib_match": match_library_sku(sku, direction_hint),
         "color_en": color_en,
         "scene_en": scene_en,
         "color_zh": data.get("color_zh") or "",

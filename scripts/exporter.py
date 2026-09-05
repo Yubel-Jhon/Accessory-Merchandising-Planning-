@@ -1,27 +1,33 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""企划导出（v0.2）：把 plan 渲染成「多页企划 deck」——HTML 长页 + 多 slide PPTX。
+"""企划导出（v0.3）：把「企划盘」（多 SKU）渲染成完整 deck——HTML 长页 + 多 slide PPTX。
 
-v0.1 是 1 页拼图；v0.2 对齐 COLE HAAN FW26 真实企划 deck 结构（PRD v2 §8.1 MVP deck）：
+v0.1 是 1 页拼图；v0.2 对齐 COLE HAAN FW26 结构升级为 8 页单款 deck；
+v0.3 升级为多 SKU 企划盘（PRD v2 二期 / 优化报告 P1-A）：
 
-  P01 封面        方向 × 品类 × 「AI 企划」副标题
+  P01 封面        方向 × N 款 × 「AI 企划」副标题
   P02 企划方法    4 步流程 + 工具/耗时（静态模板）
   P03 人群画像    3 类人群（direction.personas）
-  P04 逐款页      图组 + 参数条（成分/规格/细度/工艺/功能）+ 双价格 + 设计方向（演变轴）
-  P05 演变对比    before/after（有演变记录时）
-  P06 AI 出图体系 该 SKU × 图类型矩阵
-  P07 开发日历    8 节点时间线 + AI 压缩标注（静态模板）
-  P08 尾页        工具链 + 真实耗时拆解（plan.timing）+ THANKS
+  P04 产品结构总表 全部款：品类 / 成分 / 规格 / 双价格 / 对标（企划盘聚合）
+  P05+ 逐款页×N   图组 + 参数条（成分/规格/细度/工艺/功能）+ 双价格 + 设计方向
+  P06+ 演变对比   before/after（该款有演变记录时，紧跟其逐款页）
+  P07+ 品类矩阵   全部款拼版 + 会员价（一页看全盘）
+  P08+ AI 出图体系 行=款 × 列=图类型（每款已生成的图）
+  P09 开发日历    8 节点时间线 + AI 压缩标注（静态模板）
+  P10 尾页        工具链 + 真实耗时拆解（plan.timing）+ THANKS
 
-plan 结构（兼容 v0.1 旧字段，sku 字段缺失时逐项回退）：
+plan 结构（v0.3；兼容 v0.1/v0.2 单款字段，缺失逐项回退）：
 {
   "direction": str, "retailer": str,
-  "sku": { 全字段, 含 v2: composition/spec/fineness/price/attributes/design_directions },
-  "product": {category, material, craft, color, benchmark, ...},   # v0.1 兼容
+  "skus": [                                        # 企划盘：多款
+    { "sku": {全字段 v2}, "color": str,
+      "selected": {image_type: 图片绝对路径},
+      "variation": {before, after, axis, change} | null },
+  ],
+  # —— v0.1/v0.2 单款兼容（skus 缺失时由此合成一条目）——
+  "sku": {...}, "product": {...}, "selected": {...}, "variation": {...},
   "personas": [{name, desc, need}, ...],
   "selection_logic": {标题: 正文},
-  "selected": {image_type: 图片绝对路径},
-  "variation": {before, after, axis, change} | null,
   "timing": {evolve_sec, images_sec, total_min} | {}
 }
 """
@@ -68,26 +74,47 @@ FALLBACK_PERSONAS = [
 
 # ---------- 数据整理 ----------
 
-def _sku_view(plan):
-    """把 v2 sku 字段 + v0.1 product 字段合成一个取值视图，全兼容。"""
-    sku = plan.get("sku") or {}
-    p = plan.get("product") or {}
+def _normalize_entries(plan):
+    """企划盘（v0.3 多款）→ 条目列表；v0.1/v0.2 单款 plan 由旧字段合成一条目。空款剔除。"""
+    entries = []
+    for e in plan.get("skus") or []:
+        if e.get("selected"):
+            entries.append({
+                "sku": e.get("sku") or {},
+                "color": e.get("color", ""),
+                "selected": e["selected"],
+                "variation": e.get("variation"),
+            })
+    if not entries and plan.get("selected"):  # 旧单款兼容
+        p = plan.get("product") or {}
+        entries.append({
+            "sku": plan.get("sku") or {},
+            "color": p.get("color", ""),
+            "selected": plan["selected"],
+            "variation": plan.get("variation"),
+        })
+    return entries
+
+
+def _entry_view(entry):
+    """单款条目 → 取值视图（v2 sku 字段 + v0.1 product 字段全兼容）。"""
+    sku = entry.get("sku") or {}
     price = sku.get("price") or {}
     msrp, ws, cur = price.get("msrp"), price.get("wholesale"), price.get("currency", "¥")
-    if msrp is None:
-        msrp = (p.get("price_band") or "").split("–")[0].replace("¥", "").strip() or None
     return {
-        "category": sku.get("name") or p.get("category", "商品"),
-        "benchmark": sku.get("benchmark") or p.get("benchmark", ""),
-        "material": sku.get("material") or p.get("material", ""),
-        "craft": sku.get("craft") or p.get("craft", ""),
-        "composition": sku.get("composition") or sku.get("material") or p.get("material", ""),
+        "category": sku.get("name") or "商品",
+        "benchmark": sku.get("benchmark") or "",
+        "material": sku.get("material") or "",
+        "craft": sku.get("craft") or "",
+        "composition": sku.get("composition") or sku.get("material") or "",
         "spec": sku.get("spec") or "待补充",
         "fineness": sku.get("fineness") or "",
         "attributes": sku.get("attributes") or "",
         "design_directions": sku.get("design_directions") or [],
-        "price_str": (f'会员价 {cur}{msrp} ｜ 供货价 {cur}{ws}' if msrp and ws
-                      else (p.get("price_band") or "价格待校准")),
+        "color": entry.get("color", ""),
+        "msrp_str": f'{cur}{msrp}' if msrp else "待校准",
+        "wholesale_str": f'{cur}{ws}' if ws else "待校准",
+        "price_str": (f'会员价 {cur}{msrp} ｜ 供货价 {cur}{ws}' if msrp and ws else "价格待校准"),
     }
 
 
@@ -119,20 +146,17 @@ def _b64(path):
 # ---------- HTML 导出 ----------
 
 def render_html(plan):
-    view = _sku_view(plan)
+    entries = _normalize_entries(plan)
+    if not entries:
+        raise ValueError("plan 里没有任何已选图片（skus/selected 均为空）")
+    views = [_entry_view(e) for e in entries]
     personas = plan.get("personas") or FALLBACK_PERSONAS
-    layout = [t for t in LAYOUT_ORDER if t in plan.get("selected", {})]
-    imgs = {t: _b64(plan["selected"][t]) for t in layout}
 
     chips = [
-        ("方向", plan.get("direction", "")), ("品类", view["category"]),
-        ("成分", view["composition"]), ("规格", view["spec"]),
-        ("价格", view["price_str"]), ("对标", view["benchmark"]),
-        ("零售商", plan.get("retailer", "")),
+        ("方向", plan.get("direction", "")), ("款式数", f"{len(entries)}"),
+        ("零售商", plan.get("retailer", "")), ("日期", date.today().isoformat()),
     ]
     chip_html = "".join(f'<span class="chip"><b>{k}</b>{v}</span>' for k, v in chips if v)
-
-    dd = _design_dirs_str(view)
 
     steps_html = "".join(
         f'<div class="card"><div class="stepno">{no}</div><h3>{name}</h3><p>{desc}</p>'
@@ -143,33 +167,67 @@ def render_html(plan):
         f'<div class="card"><h3>{p["name"]}</h3><p>{p["desc"]}</p><p class="tool">要什么：{p.get("need","")}</p></div>'
         for p in personas)
 
-    params = [("成分", view["composition"]), ("规格", view["spec"]), ("细度", view["fineness"]),
-              ("工艺", view["craft"]), ("功能", view["attributes"]), ("对标", view["benchmark"])]
-    param_html = "".join(f'<div class="prow"><b>{k}</b><span>{v}</span></div>'
-                         for k, v in params if v)
+    # P04 总表
+    table_rows = "".join(
+        f'<tr><td class="tname">{v["category"]}</td><td>{v["composition"]}</td><td>{v["spec"]}</td>'
+        f'<td>{v["msrp_str"]}</td><td>{v["wholesale_str"]}</td><td>{v["benchmark"]}</td></tr>'
+        for v in views)
 
-    variation_html = ""
-    v = plan.get("variation")
-    if v:
-        axis_label = AXIS_LABEL.get(v.get("axis"), v.get("axis", ""))
-        variation_html = (
-            '<h2 class="sec">演变对比 · 畅销款 → 演变款</h2><div class="compare">'
-            f'<figure><img src="{_b64(v["before"])}"/><figcaption>畅销款（起点）</figcaption></figure>'
-            '<span class="arrow">→</span>'
-            f'<figure><img src="{_b64(v["after"])}"/><figcaption>演变款（{axis_label}：{v.get("change","")}）</figcaption></figure>'
-            '</div>')
+    # P05+ 逐款页 + 演变
+    entries_html = ""
+    for i, (e, v) in enumerate(zip(entries, views)):
+        layout = [t for t in LAYOUT_ORDER if t in e["selected"]]
+        imgs = {t: _b64(e["selected"][t]) for t in layout}
+        hero_key = "lifestyle" if "lifestyle" in e["selected"] else (layout[0] if layout else None)
+        hero = imgs.get(hero_key, "")
+        sec = [t for t in layout if t != hero_key][:2]
+        sec_html = "".join(f'<figure class="gitem"><img src="{imgs[t]}"/>'
+                           f'<figcaption>{TYPE_LABEL[t].split(" ·")[0]}</figcaption></figure>' for t in sec)
+        params = [("成分", v["composition"]), ("规格", v["spec"]), ("细度", v["fineness"]),
+                  ("工艺", v["craft"]), ("功能", v["attributes"]), ("对标", v["benchmark"])]
+        param_html = "".join(f'<div class="prow"><b>{k}</b><span>{val}</span></div>' for k, val in params if val)
+        dd = _design_dirs_str(v)
+        entries_html += (
+            f'<h2 class="sec">逐款企划 {i+1}/{len(entries)} · {v["category"]}'
+            + (f'（{v["color"]}）' if v["color"] else '') + '</h2>'
+            + f'<div class="entry"><div class="entry-imgs">'
+              f'<img class="hero" src="{hero}">{sec_html}</div>'
+              f'<div class="ppanel">{param_html}'
+              f'<div class="price"><div><div class="pv">{v["msrp_str"]}</div><div class="lab">MSRP · 会员价</div></div>'
+              f'<div><div class="pv">{v["wholesale_str"]}</div><div class="lab">WHOLESALE · 供货价</div></div></div>'
+              + (f'<div class="dd"><b>设计方向：</b>{dd}</div>' if dd else '')
+              + '</div></div>')
+        ve = e.get("variation")
+        if ve:
+            axis_label = AXIS_LABEL.get(ve.get("axis"), ve.get("axis", ""))
+            entries_html += (
+                '<div class="compare">'
+                f'<figure><img src="{_b64(ve["before"])}"/><figcaption>畅销款（起点）</figcaption></figure>'
+                '<span class="arrow">→</span>'
+                f'<figure><img src="{_b64(ve["after"])}"/>'
+                f'<figcaption>演变款（{axis_label}：{ve.get("change","")}）</figcaption></figure>'
+                '</div>')
 
-    grid = "".join(
-        f'<figure class="gitem"><img src="{imgs[t]}"/><figcaption>{TYPE_LABEL[t]}</figcaption></figure>'
-        for t in layout)
+    # 品类矩阵：一页看全盘
+    matrix_html = "".join(
+        f'<figure class="mcell"><img src="{_b64(next(iter(e["selected"].values())))}"/>'
+        f'<figcaption><b>{v["category"]}</b><span>{v["msrp_str"]}</span></figcaption></figure>'
+        for e, v in zip(entries, views))
+
+    # AI 出图体系：行=款 × 列=图类型
+    sys_rows = ""
+    for e, v in zip(entries, views):
+        layout = [t for t in LAYOUT_ORDER if t in e["selected"]]
+        row_imgs = "".join(f'<img src="{_b64(e["selected"][t])}" title="{TYPE_LABEL[t]}">' for t in layout)
+        sys_rows += f'<div class="sysrow"><div class="sysname">{v["category"]}</div><div class="sysimgs">{row_imgs}</div></div>'
 
     cal_html = "".join(f'<div class="cal"><b>{d}</b><span>{name}</span></div>' for d, name in CALENDAR)
+    hero0 = _b64(next(iter(entries[0]["selected"].values())))
 
-    hero = imgs[layout[0]] if layout else ""
     return f"""<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{view["category"]} · 产品企划</title><style>
+<title>{plan.get("direction","")} · 产品企划盘</title><style>
 :root{{--ink:#2C2C2C;--brown:#8B7355;--paper:#F5F1EA;--card:#FFF;--line:#E5DED2}}
 *{{box-sizing:border-box;margin:0;padding:0}}
 body{{font-family:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:var(--paper);color:var(--ink);line-height:1.65}}
@@ -186,12 +244,22 @@ header .sub{{color:#7a6f5f;margin-top:10px;font-size:15px}}
 .hero img{{width:100%;display:block}}
 h2.sec{{font-family:Georgia,"Songti SC",serif;font-weight:500;font-size:22px;margin:46px 0 18px;display:flex;align-items:center;gap:12px}}
 h2.sec::before{{content:"";width:26px;height:2px;background:var(--brown);display:inline-block}}
-.grid,.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}}
+.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}}
 .card{{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:18px 20px}}
 .card h3{{font-size:14px;color:var(--brown);letter-spacing:.08em;margin-bottom:8px;font-weight:600}}
 .card p{{font-size:14px;color:#3f3930}}
 .card .stepno{{font-family:Georgia,serif;font-size:26px;color:var(--brown);margin-bottom:6px}}
 .card .tool{{margin-top:8px;font-size:12px;color:#8a7f6f}}
+table.skutable{{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:6px;overflow:hidden;font-size:13px}}
+.skutable th{{background:#f0e9dc;color:var(--brown);padding:10px 12px;text-align:left;font-weight:600;font-size:12px;letter-spacing:.05em}}
+.skutable td{{padding:10px 12px;border-top:1px solid var(--line)}}
+.skutable .tname{{font-weight:600;color:var(--ink)}}
+.entry{{display:grid;grid-template-columns:1.05fr 1fr;gap:16px;align-items:start;margin-bottom:8px}}
+.entry-imgs{{display:grid;grid-template-columns:1fr 1fr;gap:10px}}
+.entry-imgs .hero{{grid-column:1/-1;width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:6px;border:1px solid var(--line)}}
+.gitem{{background:var(--card);border:1px solid var(--line);border-radius:6px;overflow:hidden}}
+.gitem img{{width:100%;aspect-ratio:1/1;object-fit:cover;display:block}}
+.gitem figcaption{{padding:8px 10px;font-size:12px;color:#5b5145;border-top:1px solid var(--line);background:#fbf9f5}}
 .ppanel{{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:20px}}
 .prow{{display:flex;gap:12px;padding:7px 0;border-bottom:1px dashed var(--line);font-size:14px}}
 .prow b{{color:var(--brown);min-width:3em;font-weight:600}}
@@ -199,51 +267,57 @@ h2.sec::before{{content:"";width:26px;height:2px;background:var(--brown);display
 .price .pv{{font-family:Georgia,serif;font-size:26px;font-weight:600}}
 .price .lab{{font-size:12px;color:#8a7f6f}}
 .dd{{margin-top:10px;font-size:13px;color:#5b5145}}
-.gitem{{background:var(--card);border:1px solid var(--line);border-radius:6px;overflow:hidden}}
-.gitem img{{width:100%;aspect-ratio:1/1;object-fit:cover;display:block}}
-.gitem figcaption{{padding:10px 12px;font-size:13px;color:#5b5145;border-top:1px solid var(--line);background:#fbf9f5}}
+.matrix{{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}}
+.mcell{{background:var(--card);border:1px solid var(--line);border-radius:6px;overflow:hidden}}
+.mcell img{{width:100%;aspect-ratio:1/1;object-fit:cover;display:block}}
+.mcell figcaption{{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;font-size:13px;border-top:1px solid var(--line)}}
+.mcell figcaption span{{font-family:Georgia,serif;font-weight:600;color:var(--brown)}}
+.sysrow{{display:grid;grid-template-columns:140px 1fr;gap:12px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:10px;margin-bottom:10px}}
+.sysname{{font-size:13px;font-weight:600;color:var(--brown)}}
+.sysimgs{{display:flex;gap:8px;overflow:hidden}}
+.sysimgs img{{width:86px;height:86px;object-fit:cover;border-radius:4px;border:1px solid var(--line)}}
 .timeline{{display:grid;grid-template-columns:repeat(8,1fr);gap:8px}}
 .cal{{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:10px;text-align:center}}
 .cal b{{display:block;font-size:12px;color:var(--brown)}}
 .cal span{{font-size:12px}}
 .airule{{margin-top:16px;padding:12px 16px;border-left:3px solid var(--brown);background:var(--card);font-size:14px}}
-.compare{{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:center;margin:6px 0 26px}}
+.compare{{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:center;margin:14px 0 26px;max-width:640px}}
 .compare figure{{background:var(--card);border:1px solid var(--line);border-radius:6px;overflow:hidden}}
 .compare img{{width:100%;aspect-ratio:1/1;object-fit:cover;display:block}}
 .compare figcaption{{padding:9px 12px;font-size:13px;color:#5b5145;border-top:1px solid var(--line)}}
 .compare .arrow{{font-size:30px;color:var(--brown)}}
 footer{{margin-top:60px;padding-top:20px;border-top:1px solid var(--line);font-size:12px;color:#a49a8b;text-align:center}}
+@media(max-width:800px){{.entry{{grid-template-columns:1fr}}}}
 </style></head><body><div class="wrap">
 <header><div class="eyebrow">Product Planning · {plan.get("retailer","")}</div>
-<h1>{view["category"]} · 产品企划</h1>
-<div class="sub">{plan.get("direction","")} ｜ 对标 {view["benchmark"]} ｜ {plan.get("retailer","")} 渠道</div>
+<h1>{plan.get("direction","")} · 产品企划盘</h1>
+<div class="sub">{len(entries)} 个款式 ｜ {plan.get("retailer","")} 渠道 ｜ {date.today().isoformat()}</div>
 <div class="badge">⚡ AI 企划 · 全盘概念图 45 分钟</div></header>
 <div class="chips">{chip_html}</div>
-<div class="hero"><img src="{hero}"></div>
+<div class="hero"><img src="{hero0}"></div>
 <h2 class="sec">企划方法：数据选款 → AI 演变 → 买手推介</h2><div class="cards">{steps_html}</div>
 <h2 class="sec">人群画像</h2><div class="cards">{personas_html}</div>
-<h2 class="sec">产品企划 · {view["category"]}</h2>
-<div class="ppanel">{param_html}
-<div class="price">
-  <div><div class="pv">{view["price_str"].split("｜")[0].strip()}</div><div class="lab">MSRP · 会员价</div></div>
-  <div><div class="pv">{view["price_str"].split("｜")[-1].strip()}</div><div class="lab">WHOLESALE · 供货价</div></div>
-</div>
-{'<div class="dd"><b>设计方向：</b>' + dd + '</div>' if dd else ''}</div>
-{variation_html}
-<h2 class="sec">一套 SKU · 多类图 · 全部 AI 生成</h2><div class="grid">{grid}</div>
+<h2 class="sec">产品结构总表</h2>
+<table class="skutable"><tr><th>品类</th><th>成分</th><th>规格</th><th>会员价</th><th>供货价</th><th>对标</th></tr>
+{table_rows}</table>
+<h2 class="sec">逐款企划</h2>
+{entries_html}
+<h2 class="sec">品类矩阵 · 一页看全盘</h2><div class="matrix">{matrix_html}</div>
+<h2 class="sec">AI 出图体系 · 行=款 × 列=图类型</h2>{sys_rows}
 <h2 class="sec">开发日历</h2><div class="timeline">{cal_html}</div>
 <div class="airule">⚡ AI 压缩：设计出图环节由「人天级」→「分钟级」，今天这套 deck 即 Agent 实跑产物。</div>
 <footer>{TOOLCHAIN}<br>{_timing_str(plan.get("timing"))} ｜ {date.today().isoformat()}</footer>
 </div></body></html>"""
 
 
-# ---------- PPTX 导出（多 slide deck） ----------
+# ---------- PPTX 导出（多 slide 企划盘 deck） ----------
 
 def render_pptx(plan, out_path):
     from pptx import Presentation
     from pptx.util import Inches, Pt
     from pptx.dml.color import RGBColor
     from pptx.enum.shapes import MSO_SHAPE
+    from pptx.enum.text import PP_ALIGN
     from PIL import Image
 
     INK = RGBColor(0x2C, 0x2C, 0x2C)
@@ -253,9 +327,11 @@ def render_pptx(plan, out_path):
     PAPER = RGBColor(0xF5, 0xF1, 0xEA)
     WHITE = RGBColor(0xFF, 0xFF, 0xFF)
 
-    view = _sku_view(plan)
+    entries = _normalize_entries(plan)
+    if not entries:
+        raise ValueError("plan 里没有任何已选图片（skus/selected 均为空）")
+    views = [_entry_view(e) for e in entries]
     personas = plan.get("personas") or FALLBACK_PERSONAS
-    layout = [t for t in LAYOUT_ORDER if t in plan.get("selected", {})]
 
     prs = Presentation()
     prs.slide_width = Inches(13.333)
@@ -315,10 +391,10 @@ def render_pptx(plan, out_path):
     # ---- P01 封面 ----
     s = new_slide()
     text(0.9, 2.1, 11.5, 0.5, [("PRODUCT PLANNING ·  " + plan.get("retailer", ""), 14, BROWN, False)], slide=s)
-    text(0.9, 2.6, 11.5, 1.2, [(f'{view["category"]} · 产品企划', 44, INK, True)], slide=s)
+    text(0.9, 2.6, 11.5, 1.2, [(f'{plan.get("direction","")} · 产品企划盘', 44, INK, True)], slide=s)
     text(0.9, 3.9, 11.5, 0.5,
-         [(f'{plan.get("direction","")} ｜ 对标 {view["benchmark"]} ｜ {plan.get("retailer","")} 渠道', 16, GREY, False)], slide=s)
-    b = card(0.9, 4.7, 3.6, 0.55, slide=s)
+         [(f'{len(entries)} 个款式 ｜ {plan.get("retailer","")} 渠道 ｜ ' + date.today().isoformat(), 16, GREY, False)], slide=s)
+    card(0.9, 4.7, 3.6, 0.55, slide=s)
     text(0.9, 4.78, 3.6, 0.4, [("⚡ AI 企划 · 全盘概念图 45 分钟", 14, BROWN, True)], slide=s)
     text(0.9, 6.7, 11.5, 0.4, [(date.today().isoformat() + " ｜ 商品企划 Agent 生成", 11, GREY, False)], slide=s)
 
@@ -345,69 +421,105 @@ def render_pptx(plan, out_path):
         text(x + 0.25, 2.85, pw - 0.5, 1.0, [(p.get("desc", ""), 14, GREY, False)], slide=s)
         text(x + 0.25, 4.4, pw - 0.5, 1.1, [("要什么：" + p.get("need", ""), 12, BROWN, False)], slide=s)
 
-    # ---- P04 逐款页 ----
+    # ---- P04 产品结构总表（企划盘聚合）----
     s = new_slide()
-    page_title(s, f'产品企划 · {view["category"]}',
-               f'{plan.get("direction","")} ｜ 对标 {view["benchmark"]} ｜ {plan.get("retailer","")}')
-    if layout:
-        hero_key = "lifestyle" if "lifestyle" in plan["selected"] else layout[0]
-        fit_img(plan["selected"][hero_key], 0.55, 1.7, 4.6, 4.4, slide=s)
-        text(0.55, 6.25, 4.6, 0.4, [(TYPE_LABEL[hero_key], 11, BROWN, False)], slide=s)
-        sec = [t for t in layout if t != hero_key][:1]
-        if sec:
-            fit_img(plan["selected"][sec[0]], 5.3, 1.7, 1.9, 2.1, slide=s)
-            text(5.3, 3.9, 1.9, 0.35, [(TYPE_LABEL[sec[0]].split(" ·")[0], 10, BROWN, False)], slide=s)
-    # 右侧参数条 + 双价格
-    px = 7.5
-    card(px, 1.7, 5.3, 4.9, slide=s)
-    rows = [("品名", view["category"]), ("成分", view["composition"]), ("规格", view["spec"]),
-            ("细度", view["fineness"]), ("工艺", view["craft"]), ("功能", view["attributes"]),
-            ("对标", view["benchmark"])]
-    ry = 1.95
-    for k, v in rows:
-        if not v:
-            continue
-        text(px + 0.25, ry, 1.0, 0.35, [(k, 12, BROWN, True)], slide=s)
-        text(px + 1.25, ry, 3.9, 0.35, [(v, 12, INK, False)], slide=s)
-        ry += 0.42
-    price_parts = view["price_str"].split("｜")
-    text(px + 0.25, ry + 0.1, 2.5, 0.6, [(price_parts[0].strip(), 20, INK, True),
-                                          ("  会员价" , 11, GREY, False)], slide=s)
-    if len(price_parts) > 1:
-        text(px + 2.9, ry + 0.1, 2.4, 0.6, [(price_parts[1].strip(), 20, BROWN, True)], slide=s)
-    dd = _design_dirs_str(view)
-    if dd:
-        text(px + 0.25, ry + 0.75, 4.9, 0.6, [("设计方向：" + dd, 11, GREY, False)], slide=s)
+    page_title(s, "产品结构总表", f'{len(entries)} 个款式 ｜ 成分 / 规格 / 双价格')
+    cols = [("品类", 2.4), ("成分", 3.3), ("规格", 2.6), ("会员价", 1.4), ("供货价", 1.4), ("对标", 2.1)]
+    tx, ty, rh = 0.55, 1.8, 0.62
+    box(tx, ty, 12.25, 0.5, fill=RGBColor(0xF0, 0xE9, 0xDC), line=LINE, slide=s)
+    cx = tx
+    for name, cwid in cols:
+        text(cx + 0.12, ty + 0.09, cwid - 0.2, 0.35, [(name, 12, BROWN, True)], slide=s)
+        cx += cwid
+    ry = ty + 0.5
+    for v in views:
+        box(tx, ry, 12.25, rh, fill=WHITE, line=LINE, slide=s)
+        row = [v["category"], v["composition"], v["spec"], v["msrp_str"], v["wholesale_str"], v["benchmark"]]
+        cx = tx
+        for val, (name, cwid) in zip(row, cols):
+            text(cx + 0.12, ry + 0.16, cwid - 0.2, 0.4, [(str(val), 12, INK, name == "品类")], slide=s)
+            cx += cwid
+        ry += rh
 
-    # ---- P05 演变对比（可选） ----
-    v = plan.get("variation")
-    if v:
+    # ---- P05+ 逐款页 × N ----
+    for idx, (e, v) in enumerate(zip(entries, views)):
         s = new_slide()
-        axis_label = AXIS_LABEL.get(v.get("axis"), v.get("axis", ""))
-        page_title(s, "演变对比 · 畅销款 → 演变款", f'{axis_label}：{v.get("change", "")}')
-        fit_img(v["before"], 0.55, 1.7, 5.9, 5.0, slide=s)
-        text(0.55, 6.8, 5.9, 0.4, [("畅销款（起点）", 12, BROWN, True)], slide=s)
-        text(6.55, 3.9, 0.5, 0.6, [("→", 36, BROWN, True)], slide=s)
-        fit_img(v["after"], 7.15, 1.7, 5.9, 5.0, slide=s)
-        text(7.15, 6.8, 5.9, 0.4, [("演变款（同族兄弟款，锁 DNA 只动一轴）", 12, BROWN, True)], slide=s)
+        sub = f'{v["color"] + " ｜ " if v["color"] else ""}{plan.get("direction","")} ｜ 对标 {v["benchmark"]} ｜ 逐款 {idx+1}/{len(entries)}'
+        page_title(s, f'产品企划 · {v["category"]}', sub)
+        layout = [t for t in LAYOUT_ORDER if t in e["selected"]]
+        if layout:
+            hero_key = "lifestyle" if "lifestyle" in e["selected"] else layout[0]
+            fit_img(e["selected"][hero_key], 0.55, 1.7, 4.6, 4.4, slide=s)
+            text(0.55, 6.25, 4.6, 0.4, [(TYPE_LABEL[hero_key], 11, BROWN, False)], slide=s)
+            sec = [t for t in layout if t != hero_key][:1]
+            if sec:
+                fit_img(e["selected"][sec[0]], 5.3, 1.7, 1.9, 2.1, slide=s)
+                text(5.3, 3.9, 1.9, 0.35, [(TYPE_LABEL[sec[0]].split(" ·")[0], 10, BROWN, False)], slide=s)
+        px = 7.5
+        card(px, 1.7, 5.3, 4.9, slide=s)
+        rows = [("品名", v["category"]), ("成分", v["composition"]), ("规格", v["spec"]),
+                ("细度", v["fineness"]), ("工艺", v["craft"]), ("功能", v["attributes"]),
+                ("对标", v["benchmark"])]
+        ry = 1.95
+        for k, val in rows:
+            if not val:
+                continue
+            text(px + 0.25, ry, 1.0, 0.35, [(k, 12, BROWN, True)], slide=s)
+            text(px + 1.25, ry, 3.9, 0.35, [(val, 12, INK, False)], slide=s)
+            ry += 0.42
+        text(px + 0.25, ry + 0.1, 2.5, 0.6, [(v["msrp_str"], 20, INK, True),
+                                             ("  会员价", 11, GREY, False)], slide=s)
+        text(px + 2.9, ry + 0.1, 2.4, 0.6, [(v["wholesale_str"], 20, BROWN, True),
+                                            ("  供货价", 11, GREY, False)], slide=s)
+        dd = _design_dirs_str(v)
+        if dd:
+            text(px + 0.25, ry + 0.75, 4.9, 0.6, [("设计方向：" + dd, 11, GREY, False)], slide=s)
 
-    # ---- P06 AI 出图体系 ----
+        # 演变对比（该款有记录时，紧跟其逐款页）
+        ve = e.get("variation")
+        if ve:
+            s = new_slide()
+            axis_label = AXIS_LABEL.get(ve.get("axis"), ve.get("axis", ""))
+            page_title(s, f'演变对比 · {v["category"]}', f'{axis_label}：{ve.get("change", "")}')
+            fit_img(ve["before"], 0.55, 1.7, 5.9, 5.0, slide=s)
+            text(0.55, 6.8, 5.9, 0.4, [("畅销款（起点）", 12, BROWN, True)], slide=s)
+            text(6.55, 3.9, 0.5, 0.6, [("→", 36, BROWN, True)], slide=s)
+            fit_img(ve["after"], 7.15, 1.7, 5.9, 5.0, slide=s)
+            text(7.15, 6.8, 5.9, 0.4, [("演变款（同族兄弟款，锁 DNA 只动一轴）", 12, BROWN, True)], slide=s)
+
+    # ---- 品类矩阵：一页看全盘 ----
     s = new_slide()
-    page_title(s, "一套 SKU · 多类图 · 全部 AI 生成", "每类图独立锁定产品 DNA · 图生图约 30 秒/张")
-    n = min(len(layout), 7)
-    if n:
-        cols = 4 if n > 4 else n
-        rows_n = (n + cols - 1) // cols
-        gw, gh, ggap = 2.9, 2.35, 0.15
-        for i, t in enumerate(layout[:7]):
-            r, c = divmod(i, cols)
-            x = 0.55 + c * (gw + ggap)
-            y = 1.75 + r * (gh + 0.45)
-            box(x, y, gw, gh, fill=WHITE, line=LINE, slide=s)
-            fit_img(plan["selected"][t], x + 0.05, y + 0.05, gw - 0.1, gh - 0.1, slide=s)
-            text(x, y + gh + 0.02, gw, 0.35, [(TYPE_LABEL[t], 10, BROWN, False)], slide=s)
+    page_title(s, "品类矩阵 · 一页看全盘", f'{len(entries)} 个款式 × 首图 + 会员价')
+    n = len(views)
+    cols_n = min(n, 4)
+    rows_n = (n + cols_n - 1) // cols_n
+    gw, gh, ggap = min(2.9, 12.25 / cols_n - 0.15), 2.9, 0.15
+    for i, (e, v) in enumerate(zip(entries, views)):
+        r, c = divmod(i, cols_n)
+        x = 0.55 + c * (gw + ggap)
+        y = 1.75 + r * (gh + 0.75)
+        first_img = next(iter(e["selected"].values()))
+        card(x, y, gw, gh, slide=s)
+        fit_img(first_img, x + 0.05, y + 0.05, gw - 0.1, gh - 0.1, slide=s)
+        text(x, y + gh + 0.06, gw * 0.62, 0.35, [(v["category"], 12, INK, True)], slide=s)
+        text(x + gw * 0.62, y + gh + 0.06, gw * 0.38, 0.35, [(v["msrp_str"], 13, BROWN, True)],
+             align=PP_ALIGN.RIGHT, slide=s)
 
-    # ---- P07 开发日历 ----
+    # ---- AI 出图体系：行=款 × 列=图类型 ----
+    s = new_slide()
+    page_title(s, "AI 出图体系", "行=款 × 列=图类型 · 每类图独立锁定产品 DNA")
+    ry = 1.8
+    row_h = min(1.15, 5.4 / max(n, 1) - 0.15)
+    for e, v in zip(entries, views):
+        layout = [t for t in LAYOUT_ORDER if t in e["selected"]][:6]
+        text(0.55, ry + row_h / 2 - 0.15, 1.6, 0.4, [(v["category"], 12, BROWN, True)], slide=s)
+        iw = (12.25 - 1.8 - (max(len(layout), 1) - 1) * 0.1) / max(len(layout), 1)
+        for j, t in enumerate(layout):
+            x = 2.35 + j * (iw + 0.1)
+            fit_img(e["selected"][t], x, ry, iw, row_h, slide=s)
+        ry += row_h + 0.22
+
+    # ---- 开发日历 ----
     s = new_slide()
     page_title(s, "FW26/27 开发日历", "企划 → 进店 8 节点")
     tw = (12.25 - 7 * 0.12) / 8
@@ -422,7 +534,7 @@ def render_pptx(plan, out_path):
     text(0.8, 5.78, 11.8, 0.5,
          [("⚡ AI 压缩：设计出图环节由「人天级」→「分钟级」——本 deck 全部概念图即 Agent 实跑产物。", 13, INK, False)], slide=s)
 
-    # ---- P08 尾页 ----
+    # ---- 尾页 ----
     s = new_slide()
     text(0.9, 2.4, 11.5, 1.2, [("THANKS", 54, INK, True)], slide=s)
     text(0.9, 3.9, 11.5, 0.5, [("工具链：" + TOOLCHAIN, 13, GREY, False)], slide=s)

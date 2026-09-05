@@ -24,9 +24,9 @@ from core import (UPLOAD_DIR, OUT_DIR, EXPORT_DIR, MODEL_DIR, REF_ROOT, ensure_a
                   KEY_HELP, IMAGE_TYPES, DIRECTIONS, RETAILER_STYLE, SIZE, SHARED,
                   DIRECTION_SLUG, slugify, sku_slug, find_sku, url_to_path, LAYERS,
                   crop_center)
-from prompts import build_prompt, build_selection_logic, build_variation_prompt  # noqa: E402
+from prompts import build_prompt, build_variation_prompt  # noqa: E402
 from qwen_client import generate as qwen_generate, _http  # noqa: E402
-from exporter import render_html, render_pptx, LAYOUT_ORDER  # noqa: E402
+from exporter import render_html, render_pptx  # noqa: E402
 
 app = Flask(__name__)
 
@@ -119,7 +119,7 @@ def recognize():
         return jsonify({"error": "无锚点图"}), 400
     from recognize import recognize as recognize_img  # noqa: E402
     try:
-        res = recognize_img(anchor)
+        res = recognize_img(anchor, direction_hint=data.get("direction"))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     return jsonify(res)
@@ -261,40 +261,47 @@ def health():
 @app.post("/api/export")
 def export():
     data = request.get_json(force=True)
+    missing = [k for k in ("direction", "retailer") if not data.get(k)]
+    if missing:
+        return jsonify({"error": f"缺少参数：{'、'.join(missing)}"}), 400
     direction = data["direction"]
-    sku = data["sku"]
     retailer = data["retailer"]
-    selected_urls = data.get("selected", {})
-    if not selected_urls:
-        return jsonify({"error": "还没有已选图片——先在轨道上生成并点选至少 1 类图再导出"}), 400
-    variation = data.get("variation")
-    if variation:
-        variation = {
-            "before": url_to_path(variation["before"]),
-            "after": url_to_path(variation["after"]),
-            "axis": variation.get("axis", ""),
-            "change": variation.get("change", ""),
-        }
-    price = sku.get("price") or {}
-    price_band = (f'会员价 {price.get("currency","¥")}{price["msrp"]} ｜ 供货价 {price.get("currency","¥")}{price["wholesale"]}'
-                  if price.get("msrp") and price.get("wholesale") else "价格待校准")
+
+    def _norm_variation(v):
+        if not v:
+            return None
+        return {"before": url_to_path(v["before"]), "after": url_to_path(v["after"]),
+                "axis": v.get("axis", ""), "change": v.get("change", "")}
+
+    # 企划盘（v0.3）：skus[] 多款；兼容旧单款字段（sku/selected）
+    entries = []
+    for e in data.get("skus") or []:
+        sel = e.get("selected") or {}
+        if not sel:
+            continue
+        entries.append({"sku": e.get("sku") or {}, "color": e.get("color", ""),
+                        "selected": {k: url_to_path(v) for k, v in sel.items()},
+                        "variation": _norm_variation(e.get("variation"))})
+    if not entries and data.get("selected"):
+        sku = data.get("sku")
+        if not sku:
+            return jsonify({"error": "缺少 sku"}), 400
+        entries.append({"sku": sku, "color": data.get("color", ""),
+                        "selected": {k: url_to_path(v) for k, v in data["selected"].items()},
+                        "variation": _norm_variation(data.get("variation"))})
+    if not entries:
+        return jsonify({"error": "企划盘是空的——先生成并点选图片，再「纳入企划盘」"}), 400
+
     plan = {
-        "sku": sku,
-        "product": {"category": sku["name"], "material": sku["material"], "craft": sku["craft"],
-                    "color": data.get("color", ""), "price_band": price_band,
-                    "benchmark": sku["benchmark"]},
         "direction": direction,
         "retailer": retailer,
         "personas": DIRECTIONS.get(direction, {}).get("personas", []),
-        "selection_logic": build_selection_logic(direction, sku),
-        "selected": {k: url_to_path(v) for k, v in selected_urls.items()},
-        "layout": [t for t in LAYOUT_ORDER if t in selected_urls],
-        "variation": variation,
+        "skus": entries,
         "timing": data.get("timing") or {},  # 前端累计的实测耗时 → 尾页「耗时拆解」
     }
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    html_path = os.path.join(EXPORT_DIR, f"企划-{stamp}.html")
-    pptx_path = os.path.join(EXPORT_DIR, f"企划-{stamp}.pptx")
+    html_path = os.path.join(EXPORT_DIR, f"企划盘-{stamp}.html")
+    pptx_path = os.path.join(EXPORT_DIR, f"企划盘-{stamp}.pptx")
     with open(html_path, "w", encoding="utf-8") as f:
         f.write(render_html(plan))
     render_pptx(plan, pptx_path)
