@@ -257,6 +257,24 @@ def generate():
     return jsonify({"job_id": job_id})
 
 
+@app.post("/api/check_consistency")
+def check_consistency():
+    """轻量一致性自检（检验③）：锚点原图 vs 生成图（qwen-vl），PASS/FAIL + 一句中文原因。
+
+    同步接口（几秒返回）：前端生成完成后逐张后台调用，结果只挂角标提示、不拦截选图。
+    自检自身失败也返回 unknown（不报 5xx），让前端好统一渲染。
+    """
+    if not ensure_api_key():
+        return jsonify({"verdict": "unknown", "reason": "API key 未接上，无法自检"})
+    data = request.get_json(force=True)
+    ref = url_to_path(data["ref"]) if data.get("ref") else None
+    img = url_to_path(data["image"]) if data.get("image") else None
+    if not ref or not os.path.isfile(ref) or not img or not os.path.isfile(img):
+        return jsonify({"verdict": "unknown", "reason": "参考图或生成图缺失，无法自检"})
+    from recognize import check_consistency as check  # noqa: E402
+    return jsonify(check(ref, img))
+
+
 @app.get("/api/status/<job_id>")
 def status(job_id):
     with JOBS_LOCK:

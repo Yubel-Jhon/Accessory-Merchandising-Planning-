@@ -27,6 +27,7 @@ const state = {
   timing: { evolve_sec: 0, images_sec: 0 },  // 实测耗时累计 → 导出尾页「耗时拆解」
   cover: null,          // deck 封面 url（从氛围图挑的或再生成的）→ 导出 P01
   coverCandidates: [],  // 「再生成」出的封面候选
+  checks: {},           // 一致性自检缓存（检验③）：生成图 url -> {verdict, reason}
 };
 
 const $ = (id) => document.getElementById(id);
@@ -302,8 +303,35 @@ function renderVariants(imgs) {
     const img = document.createElement("img");
     img.src = u;
     img.onclick = () => selectVariant(u);
-    item.appendChild(img); g.appendChild(item);
+    const badge = document.createElement("div");
+    badge.className = "ck-badge pending";
+    badge.textContent = "⏳ 自检中";
+    item.appendChild(img); item.appendChild(badge); g.appendChild(item);
+    runConsistencyCheck(u, badge);   // 异步挂角标，不挡选图
   }
+}
+
+// ---------- 一致性自检（检验③）：锚点原图 vs 生成图，qwen-vl 给 PASS/FAIL 角标 ----------
+// 只提示不拦截：自检失败/超时都落「自检不可用」，用户照常选图；结果按图 url 缓存不重复查。
+async function runConsistencyCheck(url, badge) {
+  if (!state.anchor) { paintCheckBadge(badge, { verdict: "na" }); return; }
+  if (state.checks[url]) { paintCheckBadge(badge, state.checks[url]); return; }
+  try {
+    const res = await api("/api/check_consistency", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ref: state.anchor, image: url }),
+    });
+    state.checks[url] = res;
+    paintCheckBadge(badge, res);
+  } catch (err) {
+    paintCheckBadge(badge, { verdict: "na" });
+  }
+}
+
+function paintCheckBadge(badge, res) {
+  if (res.verdict === "PASS") { badge.className = "ck-badge pass"; badge.textContent = "✅ 与原图一致"; }
+  else if (res.verdict === "FAIL") { badge.className = "ck-badge fail"; badge.textContent = "⚠️ " + (res.reason || "与原图有出入"); }
+  else { badge.className = "ck-badge na"; badge.textContent = "自检不可用"; }
 }
 
 function selectVariant(url) {
@@ -757,7 +785,7 @@ function reset() {
   Object.assign(state, { anchor: null, anchorType: "white_bg", model: null, currentType: null,
     selected: {}, variants: [], variation: null, recog: null,
     planSkus: [], timing: { evolve_sec: 0, images_sec: 0 },
-    cover: null, coverCandidates: [] });
+    cover: null, coverCandidates: [], checks: {} });
   updateAnchorPreview(null);
   const mp = $("modelPreview"); if (mp) { mp.src = ""; mp.hidden = true; }
   $("modelStatus").textContent = "";

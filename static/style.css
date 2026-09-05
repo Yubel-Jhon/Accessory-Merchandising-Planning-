@@ -161,6 +161,14 @@ select{padding:8px;border:1px solid var(--line);border-radius:6px;font-size:14px
 .gen-status.loading{color:var(--brown)}
 .gen-status.error{color:#a33}
 
+/* 一致性自检角标（结果区，挂在生成图缩略图下） */
+.ck-badge{font-size:11px;text-align:center;margin-top:3px;border-radius:4px;padding:2px 6px;
+  border:1px solid var(--line);background:#faf6ef;color:var(--muted);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ck-badge.pass{color:#2e6b3f;background:#eef6ef;border-color:#cfe3d3}
+.ck-badge.fail{color:#8c2f21;background:#fdecea;border-color:#f5c6c0}
+.ck-badge.na{background:#f5f2ec;border-style:dashed}
+
 /* AI 识别摘要 */
 .ai-summary{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
 .ai-summary .chip{background:#faf6ef;border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:13px;color:#4a4238}

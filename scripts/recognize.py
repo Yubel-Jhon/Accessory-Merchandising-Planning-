@@ -186,9 +186,58 @@ def recognize(anchor_path, direction_hint=None):
     }
 
 
+# 一致性自检 prompt：双图对比，只回 PASS/FAIL + 一句中文原因
+_CHECK_PROMPT = (
+    "你是商品图质检员。第一张图是产品参考原图，第二张是 AI 生成的商品图。"
+    "判断两张图里的产品是否为同一件：对比颜色、材质、织法/纹理、比例、设计细节。"
+    '只输出一个 JSON 对象：{"verdict":"PASS"或"FAIL",'
+    '"reason":"一句中文原因（不超过30字；不一致要指出哪里不一致，一致就说一致）"}'
+)
+
+
+def check_consistency(ref_path, gen_path):
+    """轻量一致性自检（检验③）：qwen-vl 对比「锚点原图 vs 生成图」，PASS/FAIL + 一句中文原因。
+
+    为什么：i2i 偶发漂色/改结构，选图前先给个角标提示，省得选完纳入企划盘才发现跑版。
+    只作提示不作拦截（视觉模型也会误判，最终仍由人工点选）。任何异常都降级为
+    unknown 返回、不抛错——自检挂了不能打断出图主流程。
+    """
+    try:
+        if not ensure_api_key():
+            return {"verdict": "unknown", "reason": "API key 未接上，无法自检"}
+        key = os.environ["DASHSCOPE_API_KEY"]
+        body = {
+            "model": VL_MODEL,
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": img_to_base64(ref_path)}},
+                    {"type": "image_url", "image_url": {"url": img_to_base64(gen_path)}},
+                    {"type": "text", "text": _CHECK_PROMPT},
+                ],
+            }],
+        }
+        headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+        resp = _http(VL_API, "POST", headers, body, timeout=120)
+        raw = resp["choices"][0]["message"]["content"]
+        if isinstance(raw, list):
+            raw = "".join(p.get("text", "") for p in raw if isinstance(p, dict))
+        data = _parse_json(raw)
+        verdict = (data.get("verdict") or "").strip().upper()
+        if verdict not in ("PASS", "FAIL"):
+            return {"verdict": "unknown", "reason": "质检结果无法解析"}
+        return {"verdict": verdict, "reason": (data.get("reason") or "").strip() or "无说明"}
+    except Exception as e:
+        return {"verdict": "unknown", "reason": f"自检不可用：{e}"}
+
+
 if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser()
     p.add_argument("img")
+    p.add_argument("--check", default=None, help="第二张图：与第一张做一致性自检（PASS/FAIL）")
     a = p.parse_args()
-    print(json.dumps(recognize(a.img), ensure_ascii=False))
+    if a.check:
+        print(json.dumps(check_consistency(a.img, a.check), ensure_ascii=False))
+    else:
+        print(json.dumps(recognize(a.img), ensure_ascii=False))
