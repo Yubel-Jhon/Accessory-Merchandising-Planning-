@@ -181,8 +181,10 @@ def variation():
     prompt = build_variation_prompt(sku, axis, change_desc, color_en)
     refs = [anchor]  # 畅销款参考图就是演变起点，锁它 DNA
     size = SIZE["1:1"]
+    # 一轴多案（扩展⑥）：默认一次出 3 案挑 1，比单发更容易挑出满意的演变方向
+    count = int(data.get("count") or 3)
 
-    job_id = start_job(lambda: {"images": qwen_generate(refs, prompt, size=size, n=1,
+    job_id = start_job(lambda: {"images": qwen_generate(refs, prompt, size=size, n=count,
                                                         out_dir=OUT_DIR, retries=1)})
     return jsonify({"job_id": job_id})
 

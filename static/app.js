@@ -465,12 +465,19 @@ async function doVariation() {
       color_en: state.recog ? state.recog.color_en : $("color").value,
     },
     btn: "btnVariation", status: "varStatus",
-    loading: "提交演变生成中…（pro 模型，约 1–3 分钟）",
+    loading: "提交演变生成中…（3 案，pro 模型，约 1–3 分钟）",
     waiting: "演变生成中…请稍候",
     doneLabel: "演变生成",
     onElapsed: (sec) => { state.timing.evolve_sec += sec; },
     onDone: (r, st) => {
-      st.textContent = `演变生成完成${r.elapsed ? `（用时 ${r.elapsed} 秒）` : ""}，已生成 before/after 对比`;
+      const took = r.elapsed ? `（用时 ${r.elapsed} 秒）` : "";
+      // 一轴多案（扩展⑥）：多张走候选条挑 1，单张（旧结果/兜底）直接进对比
+      if (r.images.length > 1) {
+        st.textContent = `演变候选已出${took}：点一张定为演变款`;
+        renderVarCandidates(r.images);
+        return;
+      }
+      st.textContent = `演变生成完成${took}，已生成 before/after 对比`;
       renderVariationCompare({
         before: state.anchor,
         after: r.images[0],
@@ -479,6 +486,30 @@ async function doVariation() {
       });
     },
   });
+}
+
+function renderVarCandidates(imgs) {
+  const wrap = $("varCandidates"), strip = $("varCandStrip");
+  strip.innerHTML = "";
+  imgs.forEach((u, i) => {
+    const d = document.createElement("div");
+    d.className = "cand";
+    const img = document.createElement("img");
+    img.src = u; img.title = "点此定为演变款";
+    const lab = document.createElement("div");
+    lab.className = "no"; lab.textContent = `案 ${i + 1}`;
+    img.onclick = () => {
+      wrap.hidden = true;
+      renderVariationCompare({
+        before: state.anchor,
+        after: u,
+        axis: $("varAxis").value,
+        change: $("varChange").value.trim(),
+      });
+    };
+    d.appendChild(img); d.appendChild(lab); strip.appendChild(d);
+  });
+  wrap.hidden = false;
 }
 
 // ---------- 企划盘：纳入 / 渲染 / 重开 / 移除 ----------

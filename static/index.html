@@ -117,7 +117,7 @@
 
         <section class="work-block" id="variationPanel">
           <h3>出相似款 · 畅销款演变（可选）</h3>
-          <p class="hint">用「① 起盘」的畅销款图作起点，选一个演变轴（改色/改细节/改廓形），锁住产品 DNA 只动这一个轴。生成后自动归属本款，纳入企划盘时自动带上对比页。</p>
+          <p class="hint">用「① 起盘」的畅销款图作起点，选一个演变轴（改色/改细节/改廓形），锁住产品 DNA 只动这一个轴。一次出 3 案，点一张定为演变款；纳入企划盘时自动带上对比页。</p>
           <div class="config-grid var-config">
             <label>演变轴
               <select id="varAxis">
@@ -130,8 +130,12 @@
               <input id="varChange" type="text" placeholder="例如：燕麦色改炭灰">
             </label>
           </div>
-          <button class="btn primary big" id="btnVariation">🪄 生成相似款演变图</button>
+          <button class="btn primary big" id="btnVariation">🪄 生成相似款演变图（3 案）</button>
           <div class="gen-status" id="varStatus"></div>
+          <div class="var-cands" id="varCandidates" hidden>
+            <p class="hint">演变候选 · 点一张定为演变款（其余不带走）：</p>
+            <div class="sel-strip" id="varCandStrip"></div>
+          </div>
           <div class="compare" id="varCompare" hidden>
             <figure><img id="varBefore" alt="畅销款"><figcaption>畅销款（起点）</figcaption></figure>
             <span class="arrow">→</span>

@@ -45,6 +45,14 @@ h1,h2{font-family:Georgia,"Songti SC",serif;font-weight:500}
 .var-actions{display:flex;align-items:center;gap:12px;margin:10px 0 4px}
 .var-actions .hint{margin:0;flex:1}
 
+/* 演变多案候选条（一轴出 3 案挑 1） */
+.var-cands{margin:10px 0 4px}
+.cand{display:inline-block;width:96px;margin:0 10px 8px 0;cursor:pointer}
+.cand img{width:96px;height:96px;object-fit:cover;border-radius:6px;
+  border:2px solid var(--line);display:block;transition:.15s}
+.cand:hover img{border-color:var(--brown)}
+.cand .no{font-size:11px;color:var(--muted);text-align:center;margin-top:3px}
+
 /* 右侧总览板块 */
 .overview{position:sticky;top:86px}
 .overview-panel{margin-bottom:0}
