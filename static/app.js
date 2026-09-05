@@ -482,6 +482,38 @@ async function doVariation() {
 }
 
 // ---------- 企划盘：纳入 / 渲染 / 重开 / 移除 ----------
+// ---------- 本地暂存（保险⑤）：刷新/误关浏览器不丢企划盘 ----------
+// 只存「已纳入的成果」（planSkus/耗时/封面/整体风格），工作区的半成品不存。
+// 生成的图片都落盘在 images/output/，url 不变，刷新后照样显示。
+const STORE_KEY = "planDeck.v1";
+
+function saveState() {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify({
+      planSkus: state.planSkus,
+      timing: state.timing,
+      cover: state.cover,
+      coverCandidates: state.coverCandidates,
+      planStyle: ($("planStyle") && $("planStyle").value.trim()) || "",
+    }));
+  } catch (err) { /* 暂存失败不影响主流程（隐私模式/容量满） */ }
+}
+
+function restoreState() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return false;
+    const d = JSON.parse(raw);
+    if (!d || !Array.isArray(d.planSkus) || !d.planSkus.length) return false;
+    state.planSkus = d.planSkus;
+    state.timing = d.timing || { evolve_sec: 0, images_sec: 0 };
+    state.cover = d.cover || null;
+    state.coverCandidates = d.coverCandidates || [];
+    if (d.planStyle && $("planStyle")) $("planStyle").value = d.planStyle;
+    return true;
+  } catch (err) { return false; }
+}
+
 function intoPlan() {
   if (Object.keys(state.selected).length === 0) return;
   const sku = effectiveSku();
@@ -509,6 +541,7 @@ function intoPlan() {
   $("varCompare").hidden = true; $("varActions").hidden = true; $("varStatus").textContent = "";
   $("genStatus").textContent = "";
   $("foldDone").open = true;
+  saveState();
   renderSamples(); renderTrack(); renderSelectedStrip(); renderWorkState();
   renderPlanStack(); renderPlanSkus();
 }
@@ -569,6 +602,7 @@ function renderPlanStack() {
 
 function removePlanSku(i) {
   state.planSkus.splice(i, 1);
+  saveState();
   renderPlanStack(); renderPlanSkus(); renderWorkState();
 }
 
@@ -594,6 +628,7 @@ function renderPlanSkus() {
 function reopenSkuEntry(i) {
   const e = state.planSkus[i];
   state.planSkus.splice(i, 1);
+  saveState();
   // 条目回填工作区（识别结果不再有：直接用条目里存好的生效 sku）
   state.anchor = Object.values(e.selected)[0];
   state.anchorType = Object.keys(e.selected)[0];
@@ -689,6 +724,7 @@ function renderCover() {
     if (state.cover === c.url) img.classList.add("sel");
     img.onclick = () => {
       state.cover = state.cover === c.url ? null : c.url;
+      saveState();
       renderCover();
     };
     const lab = document.createElement("div");
@@ -715,6 +751,7 @@ async function genCover() {
     onDone: (r, st) => {
       st.textContent = "封面候选已出，点上面一张设为封面";
       state.coverCandidates.push(...r.images);
+      saveState();
       renderCover();
     },
   });
@@ -786,6 +823,7 @@ function reset() {
     selected: {}, variants: [], variation: null, recog: null,
     planSkus: [], timing: { evolve_sec: 0, images_sec: 0 },
     cover: null, coverCandidates: [], checks: {} });
+  try { localStorage.removeItem(STORE_KEY); } catch (err) { /* 忽略 */ }
   updateAnchorPreview(null);
   const mp = $("modelPreview"); if (mp) { mp.src = ""; mp.hidden = true; }
   $("modelStatus").textContent = "";
@@ -814,6 +852,7 @@ function init() {
   $("sku").onchange = () => { renderColorScene(); $("skuMeta").innerHTML = skuMetaHtml(); };
   $("uploadZone").onclick = () => $("fileInput").click();
   $("btnRecognize").onclick = autoRecognize;
+  $("planStyle").addEventListener("change", saveState);  // 整体风格也是暂存内容之一
   $("btnUploadModel").onclick = () => $("modelFileInput").click();
   $("modelFileInput").onchange = uploadModel;
   $("fileInput").onchange = async (e) => {
@@ -850,6 +889,14 @@ function init() {
 
   renderDirection();
   renderSku();
+
+  // 保险⑤：上次会话纳入过的款，刷新后原样回来（图片都落盘过，url 仍有效）
+  if (restoreState()) {
+    $("foldDone").open = true;
+    $("foldPlan").open = true;
+    $("anchorStatus").innerHTML = `<span class="ok">已恢复上次会话的企划盘（${state.planSkus.length} 款）</span>，上传新图继续加款`;
+  }
+
   renderTrack(); renderWorkState(); renderPlanStack(); renderPlanSkus();
 }
 
