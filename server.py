@@ -35,6 +35,41 @@ JOBS = {}
 JOBS_LOCK = threading.Lock()
 
 
+def start_job(work):
+    """后台生图任务的唯一入口（家规见 CLAUDE.md）：建 job_id、记时、存 JOBS、开线程。
+
+    work() 由调用方给「真正干活的函数」，返回的 dict 会原样进任务结果
+    （通常带 images；error/elapsed/done 由这里统一负责，调用方不用管）。
+    """
+    job_id = uuid.uuid4().hex[:12]
+    t0 = time.monotonic()  # 耗时统计：导出尾页「真实耗时拆解」的数据源
+
+    def runner():
+        try:
+            result = work()
+            result["done"] = True
+            result["elapsed"] = round(time.monotonic() - t0)
+            result["finished_at"] = time.time()
+        except Exception as e:
+            result = {"done": True, "error": str(e), "finished_at": time.time()}
+        with JOBS_LOCK:
+            JOBS[job_id] = result
+            _sweep_jobs()
+
+    with JOBS_LOCK:
+        JOBS[job_id] = {"done": False}
+    threading.Thread(target=runner, daemon=True).start()
+    return job_id
+
+
+def _sweep_jobs():
+    """JOBS 只进不出会慢慢攒内存：清掉 1 小时前已完成的任务（须持锁调用）。"""
+    cutoff = time.time() - 3600
+    stale = [j for j, r in JOBS.items() if r.get("finished_at", 0) < cutoff]
+    for j in stale:
+        JOBS.pop(j, None)
+
+
 # ---------- 路由 ----------
 @app.get("/")
 def index():
@@ -146,21 +181,9 @@ def variation():
     prompt = build_variation_prompt(sku, axis, change_desc, color_en)
     refs = [anchor]  # 畅销款参考图就是演变起点，锁它 DNA
     size = SIZE["1:1"]
-    job_id = uuid.uuid4().hex[:12]
-    t0 = time.monotonic()  # 耗时统计：导出尾页「真实耗时拆解」的数据源
 
-    def work():
-        try:
-            paths = qwen_generate(refs, prompt, size=size, n=1, out_dir=OUT_DIR, retries=1)
-            with JOBS_LOCK:
-                JOBS[job_id] = {"done": True, "images": paths, "elapsed": round(time.monotonic() - t0)}
-        except Exception as e:
-            with JOBS_LOCK:
-                JOBS[job_id] = {"done": True, "error": str(e)}
-
-    with JOBS_LOCK:
-        JOBS[job_id] = {"done": False}
-    threading.Thread(target=work, daemon=True).start()
+    job_id = start_job(lambda: {"images": qwen_generate(refs, prompt, size=size, n=1,
+                                                        out_dir=OUT_DIR, retries=1)})
     return jsonify({"job_id": job_id})
 
 
@@ -179,21 +202,9 @@ def cover():
     names = [s.get("name") or s.get("en") or "" for s in (data.get("skus") or []) if s]
     prompt = build_cover_prompt(names, direction, style_hint)
     size = SIZE["16:9"]  # 封面是横幅构图，和 1:1 的单款图区分开
-    job_id = uuid.uuid4().hex[:12]
-    t0 = time.monotonic()
 
-    def work():
-        try:
-            paths = qwen_generate(refs[:3], prompt, size=size, n=1, out_dir=OUT_DIR, retries=1)
-            with JOBS_LOCK:
-                JOBS[job_id] = {"done": True, "images": paths, "elapsed": round(time.monotonic() - t0)}
-        except Exception as e:
-            with JOBS_LOCK:
-                JOBS[job_id] = {"done": True, "error": str(e)}
-
-    with JOBS_LOCK:
-        JOBS[job_id] = {"done": False}
-    threading.Thread(target=work, daemon=True).start()
+    job_id = start_job(lambda: {"images": qwen_generate(refs[:3], prompt, size=size, n=1,
+                                                        out_dir=OUT_DIR, retries=1)})
     return jsonify({"job_id": job_id})
 
 
@@ -239,22 +250,10 @@ def generate():
                           style_hint=data.get("style_hint"))
     size = SIZE[IMAGE_TYPES[target].get("aspect_ratio", "1:1")]
     count = data.get("count", 1)
-    job_id = uuid.uuid4().hex[:12]
-    t0 = time.monotonic()  # 耗时统计：导出尾页「真实耗时拆解」的数据源
 
-    def work():
-        try:
-            paths = qwen_generate(refs, prompt, size=size, n=count, out_dir=OUT_DIR, retries=1)
-            with JOBS_LOCK:
-                JOBS[job_id] = {"done": True, "images": paths, "no_ref": not has_ref,
-                                "elapsed": round(time.monotonic() - t0)}
-        except Exception as e:
-            with JOBS_LOCK:
-                JOBS[job_id] = {"done": True, "error": str(e)}
-
-    with JOBS_LOCK:
-        JOBS[job_id] = {"done": False}
-    threading.Thread(target=work, daemon=True).start()
+    job_id = start_job(lambda: {"images": qwen_generate(refs, prompt, size=size, n=count,
+                                                        out_dir=OUT_DIR, retries=1),
+                                "no_ref": not has_ref})
     return jsonify({"job_id": job_id})
 
 
