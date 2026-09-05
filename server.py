@@ -24,7 +24,7 @@ from core import (UPLOAD_DIR, OUT_DIR, EXPORT_DIR, MODEL_DIR, REF_ROOT, ensure_a
                   KEY_HELP, IMAGE_TYPES, DIRECTIONS, RETAILER_STYLE, SIZE, SHARED,
                   DIRECTION_SLUG, slugify, sku_slug, find_sku, url_to_path, LAYERS,
                   crop_center)
-from prompts import build_prompt, build_variation_prompt  # noqa: E402
+from prompts import build_prompt, build_variation_prompt, build_cover_prompt  # noqa: E402
 from qwen_client import generate as qwen_generate, _http  # noqa: E402
 from exporter import render_html, render_pptx  # noqa: E402
 
@@ -164,6 +164,39 @@ def variation():
     return jsonify({"job_id": job_id})
 
 
+@app.post("/api/cover")
+def cover():
+    """deck 封面：用各款已完成的图（优先氛围图）作参考 + 整体企划风格 → 生成 P01 封面候选。"""
+    if not ensure_api_key():
+        return jsonify({"error": KEY_HELP}), 503
+    data = request.get_json(force=True)
+    refs = [url_to_path(u) for u in (data.get("refs") or [])]
+    refs = [p for p in refs if p and os.path.isfile(p)]
+    if not refs:
+        return jsonify({"error": "没有可用的参考图——先把至少一款的图生成出来再出封面"}), 400
+    direction = data.get("direction") or list(DIRECTIONS.keys())[0]
+    style_hint = data.get("style_hint") or ""
+    names = [s.get("name") or s.get("en") or "" for s in (data.get("skus") or []) if s]
+    prompt = build_cover_prompt(names, direction, style_hint)
+    size = SIZE["16:9"]  # 封面是横幅构图，和 1:1 的单款图区分开
+    job_id = uuid.uuid4().hex[:12]
+    t0 = time.monotonic()
+
+    def work():
+        try:
+            paths = qwen_generate(refs[:3], prompt, size=size, n=1, out_dir=OUT_DIR, retries=1)
+            with JOBS_LOCK:
+                JOBS[job_id] = {"done": True, "images": paths, "elapsed": round(time.monotonic() - t0)}
+        except Exception as e:
+            with JOBS_LOCK:
+                JOBS[job_id] = {"done": True, "error": str(e)}
+
+    with JOBS_LOCK:
+        JOBS[job_id] = {"done": False}
+    threading.Thread(target=work, daemon=True).start()
+    return jsonify({"job_id": job_id})
+
+
 @app.post("/api/generate")
 def generate():
     if not ensure_api_key():
@@ -202,7 +235,8 @@ def generate():
             refs.append(os.path.abspath(model))
 
     prompt = build_prompt(target, sku, data["color_en"], data["scene_en"], data["retailer"],
-                          has_model=bool(model), has_ref=has_ref)
+                          has_model=bool(model), has_ref=has_ref,
+                          style_hint=data.get("style_hint"))
     size = SIZE[IMAGE_TYPES[target].get("aspect_ratio", "1:1")]
     count = data.get("count", 1)
     job_id = uuid.uuid4().hex[:12]
@@ -292,11 +326,17 @@ def export():
     if not entries:
         return jsonify({"error": "企划盘是空的——先生成并点选图片，再「纳入企划盘」"}), 400
 
+    cover = url_to_path(data["cover"]) if data.get("cover") else None
+    if cover and not os.path.isfile(cover):
+        cover = None  # 封面文件丢了就回退到无封面版式，不让导出整体失败
+
     plan = {
         "direction": direction,
         "retailer": retailer,
         "personas": DIRECTIONS.get(direction, {}).get("personas", []),
         "skus": entries,
+        "cover": cover,  # P01 封面图（用户从氛围图挑选或再生成）；None 时回退到首图版式
+        "plan_style": data.get("plan_style") or "",  # 整体企划风格 → 封面副标/总览 chip
         "timing": data.get("timing") or {},  # 前端累计的实测耗时 → 尾页「耗时拆解」
     }
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")

@@ -35,6 +35,9 @@
             <select id="retailer"></select>
           </label>
         </div>
+        <label class="mini-label">整体企划风格（出图前先填，氛围图和封面会更贴近整盘调性）
+          <input id="planStyle" type="text" placeholder="例如：静奢老钱 · 大地色系 · 城市通勤场景">
+        </label>
         <div class="upload-zone" id="uploadZone">
           <span>＋ 上传产品图（畅销款锚点）</span>
         </div>
@@ -144,8 +147,13 @@
       </div>
     </details>
 
+    <details class="fold" id="foldDone">
+      <summary>✅ 成品堆叠 · 已确认款 <span class="fold-tag" id="doneTag"></span></summary>
+      <div class="fold-body" id="doneStack"></div>
+    </details>
+
     <details class="fold" id="foldPlan">
-      <summary>③ 企划盘 · 已纳入 <span class="fold-tag" id="planCountTag">0</span> 款</summary>
+      <summary>③ 企划盘汇总 · <span class="fold-tag" id="planCountTag">0</span> 款</summary>
       <div class="fold-body" id="planSkusList"></div>
     </details>
   </main>
@@ -156,6 +164,13 @@
       <h2>企划盘总览</h2>
       <ul id="deckChecklist" class="deck-list"></ul>
       <div id="overviewSkus"></div>
+      <div class="cover-sec" id="coverSection" hidden>
+        <h3 class="cv-title">封面（P01）</h3>
+        <p class="hint">点一张当封面：可从各款氛围图里挑，或点下面按钮再生成一张。</p>
+        <div class="cover-pick" id="coverPick"></div>
+        <button class="btn ghost block" id="btnGenCover" disabled>🎨 再生成一张封面（16:9）</button>
+        <div class="gen-status" id="coverStatus"></div>
+      </div>
       <div class="overview-timing" id="overviewTiming">尚无实测耗时</div>
       <button class="btn primary big" id="btnExport" disabled>📦 导出完整企划 deck</button>
       <div class="export-row" id="exportRow"></div>

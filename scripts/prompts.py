@@ -76,6 +76,13 @@ MODEL_REF_HINT = (
     "keep the model consistent with it, while keeping the product IDENTICAL to its reference image."
 )
 
+# 氛围图（lifestyle）专属：把「整体企划风格」（用户在起盘时填的 deck 级调性）注入场景生成，
+# 让逐款氛围图贴近整盘企划的语言（其他图类型是产品本位，不注入）
+STYLE_HINT_SUFFIX = (
+    " The overall collection mood for this planning season is: {style}. "
+    "Keep the scene styling, props and color palette consistent with this collection mood."
+)
+
 # 面料图按 sku.fabric_type 分 5 支模板（织法/印花/皮革/羽绒/表面纹理）
 # 定义：把产品图里的「面料」生成为一整块平铺的面料图（不是单根纤维微距、不是换面料）
 FABRIC_TEMPLATES = {
@@ -161,12 +168,14 @@ VARIATION_AXES = {
 }
 
 
-def build_prompt(target, sku, color_en, scene_en, retailer, has_model=False, has_ref=False):
+def build_prompt(target, sku, color_en, scene_en, retailer, has_model=False, has_ref=False,
+                 style_hint=None):
     """组装生图 prompt。sku 为 directions.json 里的品类对象（含中英字段）。
 
     分流：
       - product 层 detail/fabric：有参考图（crop 局部）走 i2i 放大还原原图；无参考图走文生图兜底。
       - scene 层（studio/lifestyle/model）有上传模特参考图时注入 MODEL_REF_HINT。
+      - lifestyle（氛围图）额外注入 style_hint（整体企划风格，deck 级调性）。
     """
     if target == "model":
         tmpl = MODEL_PROMPT
@@ -227,7 +236,10 @@ def build_prompt(target, sku, color_en, scene_en, retailer, has_model=False, has
         return f"{tmpl}. {q}"
     if layer == "scene":
         hint = MODEL_REF_HINT if has_model else ""
-        return f"{tmpl}. {suffix}. {SHARED_SUFFIX}{hint}"
+        style = ""
+        if target == "lifestyle" and style_hint:
+            style = STYLE_HINT_SUFFIX.replace("{style}", style_hint)
+        return f"{tmpl}. {suffix}. {SHARED_SUFFIX}{hint}{style}"
     return f"{tmpl}. {suffix}. {SHARED_SUFFIX}"
 
 
@@ -254,6 +266,25 @@ def build_variation_prompt(sku, axis, change_desc, color_en=None):
         f'EVOLUTION (change ONLY this axis): {axis_en}.\n'
         f'Change: {change_desc}.\n'
         f'Everything else stays identical to the reference. {QUALITY}'
+    )
+
+
+def build_cover_prompt(sku_names, direction, style_hint=""):
+    """deck 封面（P01）：把各款已完成的图（优先氛围图）融成一张整盘 hero 图。
+
+    参考图传多张款图时模型会做拼合构图，prompt 明确「collection montage」而不是单款重绘。
+    """
+    items = "、".join(n for n in sku_names if n) or "配饰系列"
+    style = f" Overall collection style: {style_hint}." if style_hint else ""
+    return (
+        "Retail planning deck COVER image. Compose the reference product images into ONE elegant "
+        f"brand-mood hero image for this collection (featured items: {items}) — a curated "
+        "merchandising arrangement / mood montage: the products in harmonious composition on a "
+        "warm neutral background, soft directional lighting, quiet-luxury aesthetic. "
+        f"Planning direction: {direction}.{style} "
+        "Keep every product IDENTICAL to its reference image — same color, material, proportions, "
+        "no redesign. No text, no logos, no watermark. Wide 16:9 composition, "
+        "commercial deck-cover quality, photorealistic."
     )
 
 

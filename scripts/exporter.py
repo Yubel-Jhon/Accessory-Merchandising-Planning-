@@ -154,7 +154,8 @@ def render_html(plan):
 
     chips = [
         ("方向", plan.get("direction", "")), ("款式数", f"{len(entries)}"),
-        ("零售商", plan.get("retailer", "")), ("日期", date.today().isoformat()),
+        ("零售商", plan.get("retailer", "")), ("整体风格", plan.get("plan_style", "")),
+        ("日期", date.today().isoformat()),
     ]
     chip_html = "".join(f'<span class="chip"><b>{k}</b>{v}</span>' for k, v in chips if v)
 
@@ -222,7 +223,10 @@ def render_html(plan):
         sys_rows += f'<div class="sysrow"><div class="sysname">{v["category"]}</div><div class="sysimgs">{row_imgs}</div></div>'
 
     cal_html = "".join(f'<div class="cal"><b>{d}</b><span>{name}</span></div>' for d, name in CALENDAR)
-    hero0 = _b64(next(iter(entries[0]["selected"].values())))
+    cover = plan.get("cover")
+    cover_ok = cover and os.path.isfile(cover)
+    # P01 hero：有封面图（用户从氛围图挑的/再生成的）用它；没有回退到首款首图
+    hero0 = _b64(cover) if cover_ok else _b64(next(iter(entries[0]["selected"].values())))
 
     return f"""<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="UTF-8">
@@ -390,12 +394,30 @@ def render_pptx(plan, out_path):
 
     # ---- P01 封面 ----
     s = new_slide()
-    text(0.9, 2.1, 11.5, 0.5, [("PRODUCT PLANNING ·  " + plan.get("retailer", ""), 14, BROWN, False)], slide=s)
-    text(0.9, 2.6, 11.5, 1.2, [(f'{plan.get("direction","")} · 产品企划盘', 44, INK, True)], slide=s)
-    text(0.9, 3.9, 11.5, 0.5,
-         [(f'{len(entries)} 个款式 ｜ {plan.get("retailer","")} 渠道 ｜ ' + date.today().isoformat(), 16, GREY, False)], slide=s)
-    card(0.9, 4.7, 3.6, 0.55, slide=s)
-    text(0.9, 4.78, 3.6, 0.4, [("⚡ AI 企划 · 全盘概念图 45 分钟", 14, BROWN, True)], slide=s)
+    cover = plan.get("cover")
+    cover_ok = cover and os.path.isfile(cover)
+    plan_style = plan.get("plan_style", "")
+    if cover_ok:
+        # 有封面图：左文右图版式
+        text(0.9, 2.1, 6.0, 0.5, [("PRODUCT PLANNING ·  " + plan.get("retailer", ""), 14, BROWN, False)], slide=s)
+        text(0.9, 2.6, 6.0, 1.2, [(f'{plan.get("direction","")} · 产品企划盘', 40, INK, True)], slide=s)
+        text(0.9, 3.9, 6.0, 0.5,
+             [(f'{len(entries)} 个款式 ｜ {plan.get("retailer","")} 渠道 ｜ ' + date.today().isoformat(), 14, GREY, False)], slide=s)
+        if plan_style:
+            text(0.9, 4.4, 6.0, 0.4, [("整体企划风格：" + plan_style, 12, BROWN, False)], slide=s)
+        card(0.9, 5.0, 3.6, 0.55, slide=s)
+        text(0.9, 5.08, 3.6, 0.4, [("⚡ AI 企划 · 全盘概念图 45 分钟", 14, BROWN, True)], slide=s)
+        fit_img(cover, 7.0, 1.9, 5.5, 3.7, slide=s)
+        text(7.0, 5.68, 5.5, 0.35, [("deck 封面 · AI 生成", 10, GREY, False)], slide=s)
+    else:
+        text(0.9, 2.1, 11.5, 0.5, [("PRODUCT PLANNING ·  " + plan.get("retailer", ""), 14, BROWN, False)], slide=s)
+        text(0.9, 2.6, 11.5, 1.2, [(f'{plan.get("direction","")} · 产品企划盘', 44, INK, True)], slide=s)
+        text(0.9, 3.9, 11.5, 0.5,
+             [(f'{len(entries)} 个款式 ｜ {plan.get("retailer","")} 渠道 ｜ ' + date.today().isoformat(), 16, GREY, False)], slide=s)
+        if plan_style:
+            text(0.9, 4.35, 11.5, 0.3, [("整体企划风格：" + plan_style, 12, BROWN, False)], slide=s)
+        card(0.9, 4.7, 3.6, 0.55, slide=s)
+        text(0.9, 4.78, 3.6, 0.4, [("⚡ AI 企划 · 全盘概念图 45 分钟", 14, BROWN, True)], slide=s)
     text(0.9, 6.7, 11.5, 0.4, [(date.today().isoformat() + " ｜ 商品企划 Agent 生成", 11, GREY, False)], slide=s)
 
     # ---- P02 企划方法 ----

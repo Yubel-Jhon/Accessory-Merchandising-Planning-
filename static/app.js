@@ -27,6 +27,9 @@ const state = {
   recog: null,          // 客观识别结果（自由格式，不套用数据库）
   planSkus: [],         // 企划盘：[{ sku, colorZh, colorEn, direction, retailer, selected, variation }]
   timing: { evolve_sec: 0, images_sec: 0 },  // 实测耗时累计 → 导出尾页「耗时拆解」
+  cover: null,          // deck 封面 url（从氛围图挑的或再生成的）→ 导出 P01
+  coverCandidates: [],  // 「再生成」出的封面候选
+  coverJobId: null, coverTimer: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -94,9 +97,13 @@ function renderWorkState() {
     : "";
   $("workTag").textContent = done.size ? `已出 ${done.size}/${TYPE_ORDER.length} 类` : "";
   $("planCountTag").textContent = state.planSkus.length;
+  $("doneTag").textContent = state.planSkus.length ? `${state.planSkus.length} 款` : "";
   $("btnIntoPlan").disabled = Object.keys(state.selected).length === 0;
   $("btnExport").disabled = state.planSkus.length === 0;
+  const cs = $("coverSection");
+  if (cs) cs.hidden = state.planSkus.length === 0;
   renderOverview();
+  renderCover();
 }
 
 function computeStates() {
@@ -326,6 +333,7 @@ async function generate() {
     scene_en: sceneEn,
     retailer: $("retailer").value,
     count: parseInt($("count").value, 10),
+    style_hint: ($("planStyle") && $("planStyle").value.trim()) || "",
   };
   $("genStatus").className = "gen-status loading";
   $("genStatus").textContent = "提交生成中…（约 20–60 秒/张）";
@@ -494,34 +502,50 @@ function intoPlan() {
   $("configPanel").hidden = true; $("resultPanel").hidden = true;
   $("varCompare").hidden = true; $("varActions").hidden = true; $("varStatus").textContent = "";
   $("genStatus").textContent = "";
-  $("foldPlan").open = true;
-  renderSamples(); renderTrack(); renderSelectedStrip(); renderWorkState(); renderPlanSkus();
+  $("foldDone").open = true;
+  renderSamples(); renderTrack(); renderSelectedStrip(); renderWorkState();
+  renderPlanStack(); renderPlanSkus();
 }
 
-function renderPlanSkus() {
-  const wrap = $("planSkusList");
+// 成品堆叠：确认过的款按顺序堆在这里（最新在最上），每块只放这款生成的图 + 演变对比
+function renderPlanStack() {
+  const wrap = $("doneStack");
+  if (!wrap) return;
   wrap.innerHTML = "";
   if (!state.planSkus.length) {
-    wrap.innerHTML = '<p class="hint">还没有款纳入。在「② 逐款出图」里生成并点选图片后，点「✅ 本款完成 · 纳入企划盘」。</p>';
+    wrap.innerHTML = '<p class="hint">还没有确认的款。在「② 逐款出图」生成并点选图片后，点「✅ 本款完成 · 纳入企划盘」，这款的成品版块就会堆到这里。</p>';
     return;
   }
-  state.planSkus.forEach((e, i) => {
+  [...state.planSkus].reverse().forEach((e, r) => {
+    const i = state.planSkus.length - 1 - r;
     const d = document.createElement("details");
     d.className = "sku-entry";
-    if (i === state.planSkus.length - 1) d.open = true;
+    if (r === 0) d.open = true;
     const types = Object.keys(e.selected).map(t => TYPE_SHORT[t] || t).join(" / ");
     d.innerHTML = `<summary><span class="dot">●</span> ${escapeHtml(e.sku.name || "未命名款")}` +
-      `${e.colorZh ? `（${escapeHtml(e.colorZh)}）` : ""}<span class="cnt">${Object.keys(e.selected).length} 类图 · ${types}</span></summary>`;
+      `${e.colorZh ? `（${escapeHtml(e.colorZh)}）` : ""}<span class="cnt">${Object.keys(e.selected).length} 类图 · ${types}${e.variation ? " · 含演变" : ""}</span></summary>`;
     const body = document.createElement("div");
     body.className = "sku-entry-body";
     const g = document.createElement("div");
     g.className = "gallery";
-    for (const u of Object.values(e.selected)) {
+    for (const [t, u] of Object.entries(e.selected)) {
+      const item = document.createElement("div");
+      item.className = "gitem";
       const img = document.createElement("img");
-      img.src = u; img.title = "";
-      g.appendChild(img);
+      img.src = u; img.title = TYPE_SHORT[t] || t;
+      const lab = document.createElement("div");
+      lab.className = "glabel"; lab.textContent = (TYPE_SHORT[t] || t) + "图";
+      item.appendChild(img); item.appendChild(lab); g.appendChild(item);
     }
     body.appendChild(g);
+    if (e.variation) {
+      const cmp = document.createElement("div");
+      cmp.className = "compare mini-compare";
+      cmp.innerHTML = `<figure><img src="${e.variation.before}"><figcaption>畅销款（起点）</figcaption></figure>` +
+        `<span class="arrow">→</span>` +
+        `<figure><img src="${e.variation.after}"><figcaption>演变款（${VAR_AXIS_LABEL[e.variation.axis] || e.variation.axis}）</figcaption></figure>`;
+      body.appendChild(cmp);
+    }
     const acts = document.createElement("div");
     acts.className = "sku-entry-actions";
     const mk = (txt, fn, cls) => {
@@ -530,10 +554,34 @@ function renderPlanSkus() {
       acts.appendChild(b);
     };
     mk("✏️ 重开编辑", () => reopenSkuEntry(i));
-    mk("🗑 移除", () => { state.planSkus.splice(i, 1); renderPlanSkus(); renderWorkState(); });
+    mk("🗑 移除", () => removePlanSku(i));
     body.appendChild(acts);
     d.appendChild(body);
     wrap.appendChild(d);
+  });
+}
+
+function removePlanSku(i) {
+  state.planSkus.splice(i, 1);
+  renderPlanStack(); renderPlanSkus(); renderWorkState();
+}
+
+// ③ 企划盘汇总：紧凑列表（大图在上方成品堆叠里，这里只汇总看结构）
+function renderPlanSkus() {
+  const wrap = $("planSkusList");
+  wrap.innerHTML = "";
+  if (!state.planSkus.length) {
+    wrap.innerHTML = '<p class="hint">还没有款纳入。成品版块在上方「✅ 成品堆叠」里，这里汇总全盘。</p>';
+    return;
+  }
+  state.planSkus.forEach((e, i) => {
+    const row = document.createElement("div");
+    row.className = "plan-row";
+    const types = Object.keys(e.selected).map(t => TYPE_SHORT[t] || t).join("/");
+    row.innerHTML = `<span class="dot">●</span> <b>${escapeHtml(e.sku.name || "未命名款")}</b>` +
+      `${e.colorZh ? `（${escapeHtml(e.colorZh)}）` : ""}` +
+      `<span class="cnt">${Object.keys(e.selected).length} 类图 · ${types}${e.variation ? " · 含演变" : ""}</span>`;
+    wrap.appendChild(row);
   });
 }
 
@@ -551,7 +599,8 @@ function reopenSkuEntry(i) {
   updateAnchorPreview(state.anchor);
   $("anchorStatus").innerHTML = `编辑中：<span class="ok">${escapeHtml(e.sku.name || "")}</span>（企划盘条目已取回）`;
   $("foldWork").open = true;
-  renderSamples(); renderTrack(); renderSelectedStrip(); renderWorkState(); renderPlanSkus();
+  renderSamples(); renderTrack(); renderSelectedStrip(); renderWorkState();
+  renderPlanStack(); renderPlanSkus();
   renderVariationCompareIfAny();
 }
 
@@ -566,7 +615,7 @@ function renderOverview() {
   ul.innerHTML = "";
   const n = state.planSkus.length;
   const items = [
-    ["P01 封面", true, ""],
+    ["P01 封面", true, state.cover ? "已选封面" : "默认首图"],
     ["P02 企划方法", true, ""],
     ["P03 人群画像", true, ""],
     ["P04 产品结构总表", n > 0, n > 0 ? `${n} 款` : "待纳入"],
@@ -596,7 +645,7 @@ function renderOverview() {
       `<div class="meta">${Object.keys(e.selected).length} 类图${e.variation ? " · 含演变" : ""}</div>`;
     const del = document.createElement("button");
     del.textContent = "移除"; del.title = "从企划盘移除";
-    del.onclick = () => { state.planSkus.splice(i, 1); renderPlanSkus(); renderWorkState(); };
+    del.onclick = () => removePlanSku(i);
     row.appendChild(img); row.appendChild(info); row.appendChild(del);
     skusEl.appendChild(row);
   });
@@ -606,6 +655,98 @@ function renderOverview() {
   $("overviewTiming").textContent = total > 0
     ? `⚡ 实测累计：${t.evolve_sec ? `演变 ${t.evolve_sec}s · ` : ""}出图 ${t.images_sec}s · 合计约 ${Math.max(1, Math.round(total / 60))} 分钟`
     : "尚无实测耗时（生成后自动累计）";
+}
+
+// ---------- deck 封面：从各款氛围图里挑，或用已完成图再生成一张 ----------
+function coverRefPool() {
+  // 封面参考图池：优先各款氛围图；一款都没有时回退到每款的第一张图
+  const lifestyle = state.planSkus.filter(e => e.selected.lifestyle)
+    .map(e => ({ url: e.selected.lifestyle, label: `${e.sku.name || "款"} · 氛围图` }));
+  if (lifestyle.length) return lifestyle;
+  return state.planSkus.map(e => ({ url: Object.values(e.selected)[0], label: `${e.sku.name || "款"} · 首图` }));
+}
+
+function renderCover() {
+  const pick = $("coverPick");
+  if (!pick) return;
+  pick.innerHTML = "";
+  const pool = coverRefPool();
+  const cands = pool.map(p => ({ ...p, kind: "ref" }))
+    .concat(state.coverCandidates.map((u, i) => ({ url: u, label: `生成封面 ${i + 1}`, kind: "gen" })));
+  if (!cands.length) { $("btnGenCover").disabled = true; return; }
+  $("btnGenCover").disabled = state.planSkus.length === 0;
+  for (const c of cands) {
+    const item = document.createElement("div");
+    item.className = "cv-item";
+    const img = document.createElement("img");
+    img.src = c.url; img.title = c.label;
+    if (state.cover === c.url) img.classList.add("sel");
+    img.onclick = () => {
+      state.cover = state.cover === c.url ? null : c.url;
+      renderCover();
+    };
+    const lab = document.createElement("div");
+    lab.className = "glabel"; lab.textContent = c.label;
+    item.appendChild(img); item.appendChild(lab); pick.appendChild(item);
+  }
+}
+
+async function genCover() {
+  const pool = coverRefPool();
+  if (!pool.length) return;
+  const refs = pool.map(p => p.url);
+  const body = {
+    direction: $("direction").value,
+    style_hint: ($("planStyle") && $("planStyle").value.trim()) || "",
+    refs: refs,
+    skus: state.planSkus.map(e => ({ name: e.sku.name, en: e.sku.en })),
+  };
+  $("coverStatus").className = "gen-status loading";
+  $("coverStatus").textContent = "封面生成中…（约 20–60 秒）";
+  $("btnGenCover").disabled = true;
+  let res;
+  try {
+    res = await api("/api/cover", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+  } catch (err) {
+    $("btnGenCover").disabled = false;
+    $("coverStatus").className = "gen-status error";
+    $("coverStatus").textContent = "提交失败（后端未响应）：" + err.message;
+    return;
+  }
+  state.coverJobId = res.job_id;
+  pollCover();
+}
+
+async function pollCover() {
+  let res;
+  try {
+    res = await api("/api/status/" + state.coverJobId);
+    state.coverPollFails = 0;
+  } catch (err) {
+    state.coverPollFails = (state.coverPollFails || 0) + 1;
+    if (state.coverPollFails < 5) { state.coverTimer = setTimeout(pollCover, 2000); return; }
+    $("btnGenCover").disabled = false;
+    $("coverStatus").className = "gen-status error";
+    $("coverStatus").textContent = "查询封面状态连续失败（后端可能断开或重启了）：" + err.message;
+    return;
+  }
+  if (res.done) {
+    $("btnGenCover").disabled = false;
+    if (res.error) {
+      $("coverStatus").className = "gen-status error";
+      $("coverStatus").textContent = "封面生成失败：" + res.error;
+      return;
+    }
+    $("coverStatus").className = "gen-status";
+    $("coverStatus").textContent = "封面候选已出，点上面一张设为封面";
+    state.coverCandidates.push(...res.images);
+    renderCover();
+  } else {
+    $("coverStatus").textContent = "封面生成中…请稍候";
+    state.coverTimer = setTimeout(pollCover, 2000);
+  }
 }
 
 // ---------- 导出（企划盘多款） ----------
@@ -622,6 +763,8 @@ async function doExport() {
       selected: e.selected,
       variation: e.variation,
     })),
+    cover: state.cover,  // P01 封面（氛围图挑的或再生成）；null 时导出用首款首图版式
+    plan_style: ($("planStyle") && $("planStyle").value.trim()) || "",
     timing: totalMin > 0 ? { ...t, total_min: totalMin } : { ...t },
   };
   $("btnExport").textContent = "导出中…";
@@ -670,7 +813,8 @@ function loadSample() {
 function reset() {
   Object.assign(state, { anchor: null, anchorType: "white_bg", model: null, currentType: null,
     selected: {}, jobId: null, variants: [], variation: null, recog: null,
-    planSkus: [], timing: { evolve_sec: 0, images_sec: 0 } });
+    planSkus: [], timing: { evolve_sec: 0, images_sec: 0 },
+    cover: null, coverCandidates: [] });
   updateAnchorPreview(null);
   const mp = $("modelPreview"); if (mp) { mp.src = ""; mp.hidden = true; }
   $("modelStatus").textContent = "";
@@ -680,7 +824,9 @@ function reset() {
   $("previewFrame").hidden = true;
   $("exportRow").innerHTML = "";
   $("varCompare").hidden = true; $("varActions").hidden = true; $("varStatus").textContent = "";
-  renderSamples(); renderTrack(); renderSelectedStrip(); renderWorkState(); renderPlanSkus();
+  $("coverStatus").textContent = "";
+  renderSamples(); renderTrack(); renderSelectedStrip(); renderWorkState();
+  renderPlanStack(); renderPlanSkus();
 }
 
 // ---------- 绑定 & 启动 ----------
@@ -691,6 +837,7 @@ function init() {
   $("btnExport").onclick = doExport;
   $("btnVariation").onclick = doVariation;
   $("btnVarDiscard").onclick = discardVariation;
+  $("btnGenCover").onclick = genCover;
   $("btnIntoPlan").onclick = intoPlan;
   $("direction").onchange = () => { renderSku(); renderConfig(); renderWorkState(); };
   $("sku").onchange = () => { renderColorScene(); $("skuMeta").innerHTML = skuMetaHtml(); };
@@ -732,7 +879,7 @@ function init() {
 
   renderDirection();
   renderSku();
-  renderTrack(); renderWorkState(); renderPlanSkus();
+  renderTrack(); renderWorkState(); renderPlanStack(); renderPlanSkus();
 }
 
 (async () => {
