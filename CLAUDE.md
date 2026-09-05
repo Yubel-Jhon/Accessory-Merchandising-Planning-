@@ -16,7 +16,7 @@
 | `scripts/core.py` | 共享核心：路径、API key 多源加载、静态数据装载、图类型常量、参考图检索、裁图 |
 | `scripts/prompts.py` | **唯一 prompt 组装入口**（build_prompt / build_variation_prompt / build_cover_prompt） |
 | `scripts/qwen_client.py` | DashScope 生图客户端（直连不走系统代理；401/403 翻译成中文） |
-| `scripts/recognize.py` | qwen-vl 锚点图识别 + 库内款匹配打分 |
+| `scripts/recognize.py` | qwen-vl 锚点图识别 + 库内款匹配打分 + 生成图一致性自检 |
 | `scripts/exporter.py` | 企划盘 → HTML 长页 + 多 slide PPTX |
 | `scripts/i2i.py` | 命令行图生图小工具（qwen_client 薄封装） |
 | `static/` | 前端三件套（index.html / style.css / app.js） |
@@ -44,6 +44,10 @@
 3. **说明图（annotation）已彻底移除（2026-09-05）**：它曾只活在 exporter 的 TYPE_LABEL 里，前端轨道一直是 6 类。以后要加新图类型，必须 data/image_types.json + core.TRANSFORMS + 前端轨道 + exporter 四处一起加，不许只加一处。
 4. 生图默认 `prompt_extend=False`（提速约 20 倍）；detail/fabric 必须走 crop_center 裁块 + 原图双参考（裁太大背景色会被织进面料，踩过坑）。
 5. dashscope 请求绕过系统代理（`qwen_client._OPENER`），全局代理常死。
+6. **画质定案（2026-09-05）**：默认 `qwen-image-3.0-pro`（要更快设 `DASHSCOPE_IMAGE_MODEL=qwen-image-3.0`）；`build_prompt` 全路径末尾注 QUALITY，product 层有锚点图再注 PRODUCT_REF_LOCK。对外耗时口径一律「约 1–3 分钟/张」（前端 loading / README / deck 方法页已同步）。
+7. **自检与导语都「只提示不拦截」**：一致性自检（`recognize.check_consistency`，同步接口 `/api/check_consistency`）失败落 unknown；买手导语（`/api/sku_copy`）失败静默跳过。锦上添花的挂了不许拖垮出图主流程。
+8. **企划盘本地暂存**：localStorage key `planDeck.v1`，只存已纳入成果（planSkus/耗时/封面/整体风格/导语），工作区半成品不存；改 planSkus 条目结构时同步看 `saveState/restoreState`。
+9. 演变默认一轴出 **3 案**（`/api/variation` 的 count），前端候选条点选 1 张定为演变款；单张回退直接进对比。
 
 ## 家规（AI 每次写代码都要守）
 
