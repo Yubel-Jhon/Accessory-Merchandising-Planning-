@@ -257,6 +257,13 @@ def build_variation_prompt(sku, axis, change_desc, color_en=None):
     )
 
 
+def _price_str(sku):
+    """双价格文案：会员价/供货价（v2 B端语言）。"""
+    p = sku.get("price") or {}
+    cur = p.get("currency", "¥")
+    return f'{cur}{p.get("msrp")}–{cur}{p.get("wholesale")} 双价格（会员价/供货价）'
+
+
 def build_selection_logic(direction, sku):
     """六段选品逻辑（对齐山姆「体面的性价比」定位）。anchor 从 directions.json 读。"""
     anchor = DIRECTIONS[direction]["anchor_sku"]
@@ -264,7 +271,9 @@ def build_selection_logic(direction, sku):
     return {
         "对标": f'{b} 的「{sku["name"]}」——取它「无 logo + 大地色 + 原料等级」的视觉语言，砍到约 1/10 价格带。',
         "人群": "山姆会员 = 中产家庭，追求「体面的性价比」：不是买不起大牌，是不愿为 logo 溢价买单，要的是「看不见的奢侈」——原料等级 + 工艺。",
-        "价格带": f'¥299–499 山姆价格带，复用山姆已验证锚点（{anchor}），会员对「原料级商品」在此价位无心理障碍。',
+        "价格带": (f'{_price_str(sku)}，复用山姆已验证锚点（{anchor}），会员对「原料级商品」在此价位无心理障碍。'
+                   if sku.get("price") else
+                   f'山姆价格带待校准，复用山姆已验证锚点（{anchor}）。'),
         "差异化": f'① 参数透明——把 {sku["material"]} / {sku["craft"]} 直接标进图里，用原料等级背书；② 无 logo 静奢，让质感自己说话；③ 山姆风格后缀（大地色 + 暖棚光 + 会员店质感），与京东/BigOffs 调性区分。',
         "山姆锚点": f'复用「{anchor}」爆款逻辑：把大牌原料翻译成「可量化的参数卖点」，价格 + 参数两张牌同时打。',
         "风险": "避免 logo 侵权（对标而非仿制）、避开运动赛道（lululemon 起诉 Costco 的侵权红线），静奢/户外配饰是安全的 MVP 切口。",

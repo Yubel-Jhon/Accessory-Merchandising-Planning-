@@ -260,16 +260,22 @@ def export():
             "axis": variation.get("axis", ""),
             "change": variation.get("change", ""),
         }
+    price = sku.get("price") or {}
+    price_band = (f'会员价 {price.get("currency","¥")}{price["msrp"]} ｜ 供货价 {price.get("currency","¥")}{price["wholesale"]}'
+                  if price.get("msrp") and price.get("wholesale") else "价格待校准")
     plan = {
+        "sku": sku,
         "product": {"category": sku["name"], "material": sku["material"], "craft": sku["craft"],
-                    "color": data.get("color", ""), "price_band": "¥299–499（山姆会员价）",
+                    "color": data.get("color", ""), "price_band": price_band,
                     "benchmark": sku["benchmark"]},
         "direction": direction,
         "retailer": retailer,
+        "personas": DIRECTIONS.get(direction, {}).get("personas", []),
         "selection_logic": build_selection_logic(direction, sku),
         "selected": {k: url_to_path(v) for k, v in selected_urls.items()},
         "layout": [t for t in LAYOUT_ORDER if t in selected_urls],
         "variation": variation,
+        "timing": data.get("timing") or {},
     }
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     html_path = os.path.join(EXPORT_DIR, f"企划-{stamp}.html")
