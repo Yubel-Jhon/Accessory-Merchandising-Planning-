@@ -49,5 +49,4 @@
 | `scripts/prompts.py` | 唯一 prompt 组装入口（`build_prompt` / `build_selection_logic`） |
 | `scripts/qwen_client.py` | 生图客户端（Seedream） |
 | `scripts/exporter.py` | HTML/PPT 导出 |
-| `app.py` | 备用 Streamlit 版前端（`streamlit run app.py`） |
-| `商品企划Agent-产品规格文档.md` | 完整 PRD v1.1 |
+| `商品企划Agent-产品规格文档-v2.md` | 完整 PRD v2.0（唯一依据；旧版文档与备用前端已归档至桌面 `服装企划agent-归档/`） |
