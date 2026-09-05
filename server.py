@@ -11,6 +11,7 @@ import os
 import socket
 import sys
 import threading
+import time
 import uuid
 from datetime import datetime
 
@@ -130,6 +131,8 @@ def variation():
     if not ensure_api_key():
         return jsonify({"error": KEY_HELP}), 503
     data = request.get_json(force=True)
+    if not data.get("sku"):
+        return jsonify({"error": "缺少 sku（请先上传/选择锚点图完成识别）"}), 400
     sku = data["sku"]
     direction = data.get("direction") or list(DIRECTIONS.keys())[0]
     anchor = url_to_path(data["anchor"]) if data.get("anchor") else None
@@ -144,12 +147,13 @@ def variation():
     refs = [anchor]  # 畅销款参考图就是演变起点，锁它 DNA
     size = SIZE["1:1"]
     job_id = uuid.uuid4().hex[:12]
+    t0 = time.monotonic()  # 耗时统计：导出尾页「真实耗时拆解」的数据源
 
     def work():
         try:
             paths = qwen_generate(refs, prompt, size=size, n=1, out_dir=OUT_DIR, retries=1)
             with JOBS_LOCK:
-                JOBS[job_id] = {"done": True, "images": paths}
+                JOBS[job_id] = {"done": True, "images": paths, "elapsed": round(time.monotonic() - t0)}
         except Exception as e:
             with JOBS_LOCK:
                 JOBS[job_id] = {"done": True, "error": str(e)}
@@ -165,6 +169,12 @@ def generate():
     if not ensure_api_key():
         return jsonify({"error": KEY_HELP}), 503
     data = request.get_json(force=True)
+    # 入参校验：缺字段/类型错时给中文 400，而不是裸 KeyError 500（前端表现为「后端未响应」）
+    missing = [k for k in ("target", "sku", "color_en", "scene_en") if not data.get(k)]
+    if missing:
+        return jsonify({"error": f"缺少参数：{'、'.join(missing)}（请先上传锚点图完成识别）"}), 400
+    if data["target"] not in IMAGE_TYPES:
+        return jsonify({"error": f"未知图类型：{data['target']}"}), 400
     target = data["target"]
     sku = data["sku"]  # 完整 sku 对象（前端从 meta 带上）
     direction = data.get("direction") or list(DIRECTIONS.keys())[0]
@@ -196,12 +206,14 @@ def generate():
     size = SIZE[IMAGE_TYPES[target].get("aspect_ratio", "1:1")]
     count = data.get("count", 1)
     job_id = uuid.uuid4().hex[:12]
+    t0 = time.monotonic()  # 耗时统计：导出尾页「真实耗时拆解」的数据源
 
     def work():
         try:
             paths = qwen_generate(refs, prompt, size=size, n=count, out_dir=OUT_DIR, retries=1)
             with JOBS_LOCK:
-                JOBS[job_id] = {"done": True, "images": paths, "no_ref": not has_ref}
+                JOBS[job_id] = {"done": True, "images": paths, "no_ref": not has_ref,
+                                "elapsed": round(time.monotonic() - t0)}
         except Exception as e:
             with JOBS_LOCK:
                 JOBS[job_id] = {"done": True, "error": str(e)}
@@ -220,6 +232,7 @@ def status(job_id):
     return jsonify({"done": j["done"],
                     "error": j.get("error"),
                     "no_ref": j.get("no_ref", False),
+                    "elapsed": j.get("elapsed"),
                     "images": ["/file/" + os.path.relpath(p, ROOT).replace("\\", "/") for p in imgs]})
 
 
@@ -252,6 +265,8 @@ def export():
     sku = data["sku"]
     retailer = data["retailer"]
     selected_urls = data.get("selected", {})
+    if not selected_urls:
+        return jsonify({"error": "还没有已选图片——先在轨道上生成并点选至少 1 类图再导出"}), 400
     variation = data.get("variation")
     if variation:
         variation = {
@@ -275,7 +290,7 @@ def export():
         "selected": {k: url_to_path(v) for k, v in selected_urls.items()},
         "layout": [t for t in LAYOUT_ORDER if t in selected_urls],
         "variation": variation,
-        "timing": data.get("timing") or {},
+        "timing": data.get("timing") or {},  # 前端累计的实测耗时 → 尾页「耗时拆解」
     }
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     html_path = os.path.join(EXPORT_DIR, f"企划-{stamp}.html")

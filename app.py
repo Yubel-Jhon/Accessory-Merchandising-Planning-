@@ -11,6 +11,7 @@
 """
 import os
 import sys
+import time
 from datetime import datetime
 
 import streamlit as st
@@ -44,6 +45,8 @@ def init_state():
     st.session_state.setdefault("current_type", None)
     st.session_state.setdefault("variants", [])
     st.session_state.setdefault("variant_type", None)
+    st.session_state.setdefault("last_color", None)
+    st.session_state.setdefault("timing", {"evolve_sec": 0, "images_sec": 0})
 
 
 # ---------- 业务 ----------
@@ -63,7 +66,9 @@ def generate_variants(direction, target, sku, color_en, scene_en, retailer, coun
     refs = build_refs(direction, sku, target, anchor)
     prompt = build_prompt(target, sku, color_en, scene_en, retailer)
     size = SIZE[IMAGE_TYPES[target].get("aspect_ratio", "1:1")]
+    t0 = time.monotonic()  # 耗时统计：导出尾页「真实耗时拆解」的数据源
     paths = qwen_generate(refs, prompt, size=size, n=count, out_dir=OUT_DIR, retries=1)
+    st.session_state.timing["images_sec"] += round(time.monotonic() - t0)
     return paths, refs, prompt
 
 
@@ -106,7 +111,8 @@ with st.sidebar:
     st.divider()
     if st.button("🗑 清空重来", use_container_width=True):
         st.session_state.update({"anchor_path": None, "plan": {"selected": {}, "variants_by_type": {}},
-                                 "current_type": None, "variants": [], "variant_type": None})
+                                 "current_type": None, "variants": [], "variant_type": None,
+                                 "last_color": None, "timing": {"evolve_sec": 0, "images_sec": 0}})
         st.rerun()
 
 # 主区：三阶段
@@ -178,6 +184,7 @@ if cur:
         with st.spinner(f"Seedream 生成中（{count} 张变体，约 20–60 秒）..."):
             try:
                 paths, refs, prompt = generate_variants(direction, cur, sku, color["en"], scene["en"], retailer, count)
+                st.session_state.last_color = color["zh"]  # 记下本次用色，导出时不再依赖 color 变量存活
                 st.session_state.variants = paths
                 st.session_state.variant_type = cur
                 st.session_state.plan["variants_by_type"][cur] = paths
@@ -209,10 +216,13 @@ st.write(f"已生成 **{len(sel)}** 类图：{'、'.join(TYPE_SHORT[t] for t in 
 
 if st.button("📦 生成完整企划并导出（PPT + HTML）", type="primary", disabled=not sel):
     with st.spinner("生成选品逻辑 + 编排 + 导出中..."):
+        # color 只在「打开过轨道节点」的 rerun 里被赋值，直接引用会 NameError（一键载入示例→导出即崩）。
+        # 改为读生成时存下的 last_color，兜底取该款第一个颜色。
+        color_zh = st.session_state.get("last_color") or sku["colors"][0]["zh"]
         plan = {
             "product": {
                 "category": sku_name, "material": sku["material"], "craft": sku["craft"],
-                "color": color["zh"], "price_band": "¥299–499（山姆会员价）",
+                "color": color_zh, "price_band": "¥299–499（山姆会员价）",
                 "benchmark": sku["benchmark"],
             },
             "direction": direction,
@@ -220,6 +230,7 @@ if st.button("📦 生成完整企划并导出（PPT + HTML）", type="primary",
             "selection_logic": build_selection_logic(direction, sku),
             "selected": dict(sel),
             "layout": [t for t in LAYOUT_ORDER if t in sel],
+            "timing": st.session_state.get("timing") or {},
         }
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         html_path = os.path.join(EXPORT_DIR, f"企划-{stamp}.html")

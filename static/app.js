@@ -25,6 +25,7 @@ const state = {
   variation: null, variationInPlan: false,
   varJobId: null, varTimer: null,
   recog: null,          // 客观识别结果（自由格式，不套用数据库）
+  timing: { evolve_sec: 0, images_sec: 0 },  // 实测耗时累计 → 导出尾页「耗时拆解」
 };
 
 const $ = (id) => document.getElementById(id);
@@ -89,6 +90,17 @@ function renderStatus() {
   }
   const n = Object.keys(state.selected).length;
   $("btnExport").disabled = (n === 0);
+  // 实测耗时：有数据就展示（演示时这是「Agent 真跑出来的数字」）
+  const t = state.timing;
+  if (t.images_sec || t.evolve_sec) {
+    const li = document.createElement("li");
+    li.className = "done";
+    const parts = [];
+    if (t.evolve_sec) parts.push(`演变 ${t.evolve_sec}s`);
+    if (t.images_sec) parts.push(`出图 ${t.images_sec}s`);
+    li.innerHTML = `<span class="mark">⚡</span> 实测累计：${parts.join(" · ")}`;
+    ul.appendChild(li);
+  }
 }
 
 function computeStates() {
@@ -321,9 +333,11 @@ async function poll() {
       return;
     }
     $("genStatus").className = "gen-status";
+    const tookTxt = res.elapsed ? `（用时 ${res.elapsed} 秒）` : "";
+    if (res.elapsed) { state.timing.images_sec += res.elapsed; renderStatus(); }
     $("genStatus").textContent = res.no_ref
-      ? "生成完成（⚠️ 本次无原图参考，按文字推断生成，面料/颜色可能与实物不符）："
-      : "生成完成，请在下方点选 1 张：";
+      ? `生成完成${tookTxt}（⚠️ 本次无原图参考，按文字推断生成，面料/颜色可能与实物不符）：`
+      : `生成完成${tookTxt}，请在下方点选 1 张：`;
     state.variantType = state.currentType;
     state.variants = res.images;
     $("resultPanel").hidden = false;
@@ -402,7 +416,8 @@ async function pollVariation() {
       return;
     }
     $("varStatus").className = "gen-status";
-    $("varStatus").textContent = "演变生成完成，已生成 before/after 对比";
+    if (res.elapsed) { state.timing.evolve_sec += res.elapsed; renderStatus(); }
+    $("varStatus").textContent = `演变生成完成${res.elapsed ? `（用时 ${res.elapsed} 秒）` : ""}，已生成 before/after 对比`;
     renderVariationCompare({
       before: state.anchor,
       after: res.images[0],
@@ -434,6 +449,7 @@ async function doExport() {
     color: color,
     selected: state.selected,
     variation: state.variationInPlan ? state.variation : null,
+    timing: state.timing,  // 实测耗时 → 导出尾页「耗时拆解」
   };
   $("btnExport").textContent = "导出中…";
   const res = await api("/api/export", {
@@ -471,7 +487,8 @@ function loadSample() {
 
 function reset() {
   Object.assign(state, { anchor: null, anchorType: "white_bg", model: null, currentType: null,
-    selected: {}, jobId: null, variants: [], variation: null, variationInPlan: false, recog: null });
+    selected: {}, jobId: null, variants: [], variation: null, variationInPlan: false, recog: null,
+    timing: { evolve_sec: 0, images_sec: 0 } });
   updateAnchorPreview(null);
   const mp = $("modelPreview"); if (mp) { mp.src = ""; mp.hidden = true; }
   $("modelStatus").textContent = "";
