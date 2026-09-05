@@ -83,6 +83,7 @@ def _normalize_entries(plan):
                 "color": e.get("color", ""),
                 "selected": e["selected"],
                 "variation": e.get("variation"),
+                "copy": e.get("copy") or "",  # 买手导语（扩展⑦），缺位不阻塞导出
             })
     if not entries and plan.get("selected"):  # 旧单款兼容
         p = plan.get("product") or {}
@@ -91,6 +92,7 @@ def _normalize_entries(plan):
             "color": p.get("color", ""),
             "selected": plan["selected"],
             "variation": plan.get("variation"),
+            "copy": plan.get("copy") or "",
         })
     return entries
 
@@ -111,6 +113,7 @@ def _entry_view(entry):
         "attributes": sku.get("attributes") or "",
         "design_directions": sku.get("design_directions") or [],
         "color": entry.get("color", ""),
+        "copy": (entry.get("copy") or "").strip(),
         "msrp_str": f'{cur}{msrp}' if msrp else "待校准",
         "wholesale_str": f'{cur}{ws}' if ws else "待校准",
         "price_str": (f'会员价 {cur}{msrp} ｜ 供货价 {cur}{ws}' if msrp and ws else "价格待校准"),
@@ -187,12 +190,13 @@ def render_html(plan):
                   ("工艺", v["craft"]), ("功能", v["attributes"]), ("对标", v["benchmark"])]
         param_html = "".join(f'<div class="prow"><b>{k}</b><span>{val}</span></div>' for k, val in params if val)
         dd = _design_dirs_str(v)
+        copy_html = f'<div class="copy">🗣 买手导语：{v["copy"]}</div>' if v["copy"] else ""
         entries_html += (
             f'<h2 class="sec">逐款企划 {i+1}/{len(entries)} · {v["category"]}'
             + (f'（{v["color"]}）' if v["color"] else '') + '</h2>'
             + f'<div class="entry"><div class="entry-imgs">'
               f'<img class="hero" src="{hero}">{sec_html}</div>'
-              f'<div class="ppanel">{param_html}'
+              f'<div class="ppanel">{copy_html}{param_html}'
               f'<div class="price"><div><div class="pv">{v["msrp_str"]}</div><div class="lab">MSRP · 会员价</div></div>'
               f'<div><div class="pv">{v["wholesale_str"]}</div><div class="lab">WHOLESALE · 供货价</div></div></div>'
               + (f'<div class="dd"><b>设计方向：</b>{dd}</div>' if dd else '')
@@ -270,6 +274,7 @@ table.skutable{{width:100%;border-collapse:collapse;background:var(--card);borde
 .price .pv{{font-family:Georgia,serif;font-size:26px;font-weight:600}}
 .price .lab{{font-size:12px;color:#8a7f6f}}
 .dd{{margin-top:10px;font-size:13px;color:#5b5145}}
+.copy{{margin:0 0 12px;padding:9px 12px;border-left:3px solid var(--camel);background:#fbf7f0;font-size:13px;color:#4a4238}}
 .matrix{{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}}
 .mcell{{background:var(--card);border:1px solid var(--line);border-radius:6px;overflow:hidden}}
 .mcell img{{width:100%;aspect-ratio:1/1;object-fit:cover;display:block}}
@@ -478,9 +483,9 @@ def render_pptx(plan, out_path):
                 text(5.3, 3.9, 1.9, 0.35, [(TYPE_LABEL[sec[0]].split(" ·")[0], 10, BROWN, False)], slide=s)
         px = 7.5
         card(px, 1.7, 5.3, 4.9, slide=s)
-        rows = [("品名", v["category"]), ("成分", v["composition"]), ("规格", v["spec"]),
-                ("细度", v["fineness"]), ("工艺", v["craft"]), ("功能", v["attributes"]),
-                ("对标", v["benchmark"])]
+        rows = [("品名", v["category"]), ("导语", v["copy"]), ("成分", v["composition"]),
+                ("规格", v["spec"]), ("细度", v["fineness"]), ("工艺", v["craft"]),
+                ("功能", v["attributes"]), ("对标", v["benchmark"])]
         ry = 1.95
         for k, val in rows:
             if not val:

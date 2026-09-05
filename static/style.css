@@ -87,6 +87,9 @@ h1,h2{font-family:Georgia,"Songti SC",serif;font-weight:500}
 /* 成品堆叠里的演变对比：小一号 */
 .mini-compare{max-width:420px;margin:10px 0 4px}
 .mini-compare .arrow{font-size:20px}
+/* 买手导语（成品堆叠条目顶部） */
+.sku-copy{font-size:13px;color:#4a4238;background:#faf6ef;border-left:3px solid var(--camel);
+  border-radius:0 6px 6px 0;padding:8px 12px;margin:0 0 10px}
 
 /* ③ 企划盘汇总：紧凑行 */
 .plan-row{display:flex;align-items:baseline;gap:8px;font-size:13px;padding:7px 2px;

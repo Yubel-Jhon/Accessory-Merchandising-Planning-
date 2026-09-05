@@ -560,6 +560,7 @@ function intoPlan() {
   };
   const i = state.planSkus.findIndex(e => e.sku.name === entry.sku.name);
   if (i >= 0) state.planSkus[i] = entry; else state.planSkus.push(entry);
+  fetchSkuCopy(entry);  // 扩展⑦：异步补一句买手导语，成了再刷新
 
   // 工作区清空，准备下一款（保留 风格/零售商/模特图/耗时累计）
   state.anchor = null; state.anchorType = "white_bg"; state.currentType = null;
@@ -575,6 +576,22 @@ function intoPlan() {
   saveState();
   renderSamples(); renderTrack(); renderSelectedStrip(); renderWorkState();
   renderPlanStack(); renderPlanSkus();
+}
+
+// 买手导语（扩展⑦）：纳入后异步生成一句卖点，写成 entry.copy；失败静默跳过
+function fetchSkuCopy(entry) {
+  if (entry.copy) return;
+  api("/api/sku_copy", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      sku: entry.sku, color_zh: entry.colorZh, direction: entry.direction,
+      retailer: entry.retailer, has_variation: !!entry.variation,
+    }),
+  }).then(res => {
+    if (!res.copy) return;   // 导语缺位不打扰用户
+    entry.copy = res.copy;
+    saveState(); renderPlanStack();
+  }).catch(() => { /* 导语缺位不影响企划盘 */ });
 }
 
 // 成品堆叠：确认过的款按顺序堆在这里（最新在最上），每块只放这款生成的图 + 演变对比
@@ -608,6 +625,12 @@ function renderPlanStack() {
       item.appendChild(img); item.appendChild(lab); g.appendChild(item);
     }
     body.appendChild(g);
+    if (e.copy) {
+      const c = document.createElement("div");
+      c.className = "sku-copy";
+      c.textContent = `🗣 买手导语：${e.copy}`;
+      body.insertBefore(c, g);
+    }
     if (e.variation) {
       const cmp = document.createElement("div");
       cmp.className = "compare mini-compare";
@@ -801,6 +824,7 @@ async function doExport() {
       color: e.colorZh || "",
       selected: e.selected,
       variation: e.variation,
+      copy: e.copy || null,  // 买手导语（扩展⑦）
     })),
     cover: state.cover,  // P01 封面（氛围图挑的或再生成）；null 时导出用首款首图版式
     plan_style: ($("planStyle") && $("planStyle").value.trim()) || "",

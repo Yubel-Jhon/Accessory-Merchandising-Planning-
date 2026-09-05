@@ -264,6 +264,24 @@ def build_variation_prompt(sku, axis, change_desc, color_en=None):
     )
 
 
+def build_sku_copy_prompt(sku, color_zh="", direction="", retailer="", has_variation=False):
+    """逐款买手导语（扩展⑦）的 prompt：一句 B 端买手语言的卖点，≤30 字。
+
+    为什么：逐款页只有参数条，缺一句「为什么选它」的人话。纳入企划盘时异步生成一次，
+    失败就静默跳过（导语缺位不阻塞纳入/导出）。
+    """
+    basis = "、".join(x for x in [sku.get("material"), sku.get("craft")] if x) \
+        or sku.get("en") or "该品类的原料与工艺"
+    name = sku.get("name") or sku.get("en") or "配饰单品"
+    extra = "该款还带单轴演变的相似款企划。" if has_variation else ""
+    return (
+        "你是给零售买手写推介的商品企划。用一句中文卖点概括这款为什么值得进货，"
+        f"不超过30字。款式：「{name}」{'· ' + color_zh if color_zh else ''}；"
+        f"核心卖点基于：{basis}；风格方向「{direction}」，面向「{retailer}」的客群。{extra}"
+        "只输出这句话本身：不要引号、不要解释、不要感叹号堆砌、不夸大功效。"
+    )
+
+
 def build_cover_prompt(sku_names, direction, style_hint=""):
     """deck 封面（P01）：把各款已完成的图（优先氛围图）融成一张整盘 hero 图。
 

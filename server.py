@@ -24,7 +24,8 @@ from core import (UPLOAD_DIR, OUT_DIR, EXPORT_DIR, MODEL_DIR, REF_ROOT, ensure_a
                   KEY_HELP, IMAGE_TYPES, DIRECTIONS, RETAILER_STYLE, SIZE, SHARED,
                   DIRECTION_SLUG, slugify, sku_slug, find_sku, url_to_path, LAYERS,
                   crop_center)
-from prompts import build_prompt, build_variation_prompt, build_cover_prompt  # noqa: E402
+from prompts import (build_prompt, build_variation_prompt, build_cover_prompt,  # noqa: E402
+                     build_sku_copy_prompt)
 from qwen_client import generate as qwen_generate, _http  # noqa: E402
 from exporter import render_html, render_pptx  # noqa: E402
 
@@ -259,6 +260,37 @@ def generate():
     return jsonify({"job_id": job_id})
 
 
+@app.post("/api/sku_copy")
+def sku_copy():
+    """逐款买手导语（扩展⑦）：qwen-turbo 一句话进货卖点，纳入企划盘时前端异步调一次。
+
+    纯锦上添花：失败/超时都返回 200 + {"copy": null}，前端静默跳过——
+    导语缺位不阻塞纳入，更不阻塞导出。
+    """
+    if not ensure_api_key():
+        return jsonify({"copy": None, "error": KEY_HELP})
+    data = request.get_json(force=True)
+    sku = data.get("sku") or {}
+    if not (sku.get("name") or sku.get("en")):
+        return jsonify({"copy": None, "error": "缺少款式信息"})
+    prompt = build_sku_copy_prompt(sku, color_zh=data.get("color_zh", ""),
+                                   direction=data.get("direction", ""),
+                                   retailer=data.get("retailer", ""),
+                                   has_variation=bool(data.get("has_variation")))
+    body = {"model": "qwen-turbo", "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 60}
+    headers = {"Authorization": f"Bearer {os.environ['DASHSCOPE_API_KEY']}",
+               "Content-Type": "application/json"}
+    try:
+        resp = _http("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+                     "POST", headers, body, timeout=30, retries=1)
+        text = (resp["choices"][0]["message"]["content"] or "").strip()
+        text = text.strip('"“”「」。.').strip()  # 模型偶发把整句包进引号
+        return jsonify({"copy": text or None})
+    except Exception as e:
+        return jsonify({"copy": None, "error": str(e)})
+
+
 @app.post("/api/check_consistency")
 def check_consistency():
     """轻量一致性自检（检验③）：锚点原图 vs 生成图（qwen-vl），PASS/FAIL + 一句中文原因。
@@ -334,7 +366,8 @@ def export():
             continue
         entries.append({"sku": e.get("sku") or {}, "color": e.get("color", ""),
                         "selected": {k: url_to_path(v) for k, v in sel.items()},
-                        "variation": _norm_variation(e.get("variation"))})
+                        "variation": _norm_variation(e.get("variation")),
+                        "copy": e.get("copy") or ""})
     if not entries and data.get("selected"):
         sku = data.get("sku")
         if not sku:
