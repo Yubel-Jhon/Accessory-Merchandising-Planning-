@@ -6,8 +6,9 @@
   1. 零售商风格后缀（retailer_style.json）
   2. SHARED_SUFFIX 一致性约束（image_types.json）
 
-另备 PRODUCT_REF_LOCK / QUALITY / NEGATIVE_PROMPT 三个更强的词库（吸收
-wzj177-ecommerce-image-suite 架构），目前 demo 路径未强制注入，留作后续调优开关。
+PRODUCT_REF_LOCK / QUALITY 已强制注入组装链（2026-09 定案，画质优先）：product 层
+带参考图注 PRODUCT_REF_LOCK，所有图型末尾注 QUALITY。NEGATIVE_PROMPT 仍留作手动
+调优素材（DashScope 生图接口没有 negative_prompt 参数，注了也没用）。
 """
 from core import IMAGE_TYPES, SHARED_SUFFIX, RETAILER_STYLE, DIRECTIONS, TONE, GARMENT_STRUCTURES
 
@@ -174,8 +175,10 @@ def build_prompt(target, sku, color_en, scene_en, retailer, has_model=False, has
 
     分流：
       - product 层 detail/fabric：有参考图（crop 局部）走 i2i 放大还原原图；无参考图走文生图兜底。
+      - product 层 white_bg：有产品参考图（锚点）在最前注 PRODUCT_REF_LOCK（最高优先级锁产品）。
       - scene 层（studio/lifestyle/model）有上传模特参考图时注入 MODEL_REF_HINT。
       - lifestyle（氛围图）额外注入 style_hint（整体企划风格，deck 级调性）。
+      - 画质：所有路径末尾都注画质词（detail/fabric 用各自的 I2I/TEXT2IMG 版，其余用 QUALITY）。
     """
     if target == "model":
         tmpl = MODEL_PROMPT
@@ -232,26 +235,18 @@ def build_prompt(target, sku, color_en, scene_en, retailer, has_model=False, has
 
     if target == "fabric" or target == "detail":
         # 局部纹理图：i2i 走「保留参考图材质颜色」画质词；文生图走 TEXT2IMG_QUALITY。不拼零售商后缀。
+        # 它们模板里已带 MATERIAL_REF_LOCK（比 PRODUCT_REF_LOCK 更针对裁块局部），不重复注入。
         q = I2I_TEXTURE_QUALITY if has_ref else TEXT2IMG_QUALITY
         return f"{tmpl}. {q}"
+    # 画质①：product 层有产品参考图时，最前注最高优先级的产品锁；所有路径末尾注 QUALITY。
+    lock = f"{PRODUCT_REF_LOCK}\n\n" if (layer == "product" and has_ref) else ""
     if layer == "scene":
         hint = MODEL_REF_HINT if has_model else ""
         style = ""
         if target == "lifestyle" and style_hint:
             style = STYLE_HINT_SUFFIX.replace("{style}", style_hint)
-        return f"{tmpl}. {suffix}. {SHARED_SUFFIX}{hint}{style}"
-    return f"{tmpl}. {suffix}. {SHARED_SUFFIX}"
-
-
-def build_prompt_full(target, sku, color_en, scene_en, retailer, has_ref=True):
-    """增强版 prompt：在 build_prompt 之上叠加 PRODUCT_REF_LOCK + QUALITY（有参考图时）。
-
-    用于要求更高产品一致性的场景；demo 默认走 build_prompt（更快、更省 token）。
-    """
-    base = build_prompt(target, sku, color_en, scene_en, retailer)
-    if has_ref:
-        return f"{PRODUCT_REF_LOCK}\n\n{base} {QUALITY}"
-    return base
+        return f"{lock}{tmpl}. {suffix}. {SHARED_SUFFIX}{hint}{style} {QUALITY}"
+    return f"{lock}{tmpl}. {suffix}. {SHARED_SUFFIX} {QUALITY}"
 
 
 def build_variation_prompt(sku, axis, change_desc, color_en=None):
@@ -324,7 +319,7 @@ if __name__ == "__main__":
     p.add_argument("--color", default=None, help="颜色英文（默认该款第一个）")
     p.add_argument("--scene", default=None, help="场景英文（默认该款第一个）")
     p.add_argument("--retailer", default="山姆", help="零售商")
-    p.add_argument("--rich", action="store_true", help="注入 PRODUCT_REF_LOCK + QUALITY")
+    p.add_argument("--no-ref", action="store_true", help="按「无参考图」兜底路径组装（默认模拟有锚点图）")
     args = p.parse_args()
 
     skus = DIRECTIONS[args.direction]["skus"]
@@ -339,10 +334,8 @@ if __name__ == "__main__":
         if not args.type:
             p.error("请给 --type（出图 prompt）或 --variation（出相似款）")
         scene_en = args.scene or sku["scenes"][0]["en"]
-        if args.rich:
-            prompt = build_prompt_full(args.type, sku, color_en, scene_en, args.retailer, has_ref=True)
-        else:
-            prompt = build_prompt(args.type, sku, color_en, scene_en, args.retailer)
+        prompt = build_prompt(args.type, sku, color_en, scene_en, args.retailer,
+                              has_ref=not args.no_ref)
 
     print("=== PROMPT ===")
     print(prompt)

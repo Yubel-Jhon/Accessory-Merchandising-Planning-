@@ -27,13 +27,13 @@
 ## 产品流程（对齐 PRD §5 三阶段）
 
 1. **起盘**：上传或选一张产品图（自动识别类型 / 可手改）。
-2. **转换**：点图类型轨道节点 → 下拉向导 → Seedream 生成变体 → 点选 1 张。
+2. **转换**：点图类型轨道节点 → 下拉向导 → 通义 qwen-image 生成变体 → 点选 1 张。
 3. **组装**：自动出 6 段选品逻辑 → 编排 → 导出 PPT + HTML。
 
 ## 生图说明
 
-- 生图走**通义 qwen-image-3.0-pro**（图生图），API Key 从 `~/.claude/settings.json` 自动读取，无需手动配置。
-- 约 20–60 秒/张（已关闭 `prompt_extend` 提速约 20 倍）。
+- 生图走**通义 qwen-image-3.0-pro**（图生图，画质优先；想更快可设环境变量 `DASHSCOPE_IMAGE_MODEL=qwen-image-3.0`），API Key 从 `~/.claude/settings.json` 自动读取，无需手动配置。
+- 约 1–3 分钟/张（已关闭 `prompt_extend` 提速；prompt 强制注入产品锁 + 相机级画质词）。
 - 生成图落盘 `images/output/`，导出落盘 `demo/output/`。
 
 ## 目录
@@ -47,6 +47,6 @@
 | `data/image_types.json` 等 | 图类型 prompt / 零售商风格 / 对标库 |
 | `scripts/core.py` | 共享核心：路径 / API Key / 静态数据 / 图类型常量 / 参考图选取 |
 | `scripts/prompts.py` | 唯一 prompt 组装入口（`build_prompt` / `build_selection_logic`） |
-| `scripts/qwen_client.py` | 生图客户端（Seedream） |
+| `scripts/qwen_client.py` | 生图客户端（qwen-image-3.0-pro） |
 | `scripts/exporter.py` | HTML/PPT 导出 |
 | `商品企划Agent-产品规格文档-v2.md` | 完整 PRD v2.0（唯一依据；旧版文档与备用前端已归档至桌面 `服装企划agent-归档/`） |

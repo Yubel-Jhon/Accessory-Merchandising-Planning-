@@ -225,23 +225,23 @@ def generate():
     anchor = url_to_path(data["anchor"]) if data.get("anchor") else None
     model = url_to_path(data["model"]) if data.get("model") else None
 
+    # 锚点图在 = 有产品参考图。细节/面料用它裁局部 i2i；white_bg 用它决定注不注产品锁（画质①）。
+    has_ref = bool(anchor and os.path.isfile(anchor))
     # 细节图/面料图：裁原图局部当参考，i2i 放大还原（文生图不传原图，材质/颜色对不上）。
     # 裁剪必须收紧到产品内部：裁太大（>0.65）会把背景（白底/深灰棚）整片带进参考图，
     # 模型会把背景色「织」进面料——出现过驼色围巾生成灰色面料的实际案例。
-    has_ref = False
     if target in ("detail", "fabric"):
-        if anchor and os.path.isfile(anchor):
+        if has_ref:
             # 文+图双参考（实测定案）：① 中心裁块管「纹理像」——fabric 0.45 纯纹理、
             # detail 0.6 带结构（缝线/拼接/收边），裁太大背景色会被织进面料（踩过坑）；
             # ② 完整原图管「整体对」——整体颜色/图案布局/结构语境，印花类尤其需要。
             # 两个一起传，配合 prompt 里的材质颜色文字锚点，三重锁定。
             ratio = 0.6 if target == "detail" else 0.45
             refs = [crop_center(anchor, ratio=ratio), os.path.abspath(anchor)]
-            has_ref = True
         else:
             refs = []  # 无原图时文生图兜底（纯文字推断，还原度有限，前端会提示）
     else:
-        refs = [anchor] if anchor else []
+        refs = [anchor] if has_ref else []
         if model and os.path.isfile(model):
             refs.append(os.path.abspath(model))
 

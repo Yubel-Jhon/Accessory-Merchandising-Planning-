@@ -49,9 +49,9 @@ MIME = {
 # 否则 urllib 默认读系统代理 → WinError 10061（目标计算机积极拒绝）。
 _OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
-# 默认用 qwen-image-3.0（-pro 的更快版，能力一致、图生图更快）。
-# 想要更高画质可设环境变量 DASHSCOPE_IMAGE_MODEL=qwen-image-3.0-pro 切回。
-MODEL = os.environ.get("DASHSCOPE_IMAGE_MODEL", "qwen-image-3.0")
+# 默认 qwen-image-3.0-pro（2026-09 定案：面试 demo 画质优先，pro 的细节/质感更好）。
+# 想更快可设环境变量 DASHSCOPE_IMAGE_MODEL=qwen-image-3.0 切回（能力一致、更快）。
+MODEL = os.environ.get("DASHSCOPE_IMAGE_MODEL", "qwen-image-3.0-pro")
 
 
 def img_to_base64(path, max_side=1280):

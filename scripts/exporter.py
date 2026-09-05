@@ -57,12 +57,12 @@ CALENDAR = [
 # 企划方法 4 步（静态模板）
 METHOD_STEPS = [
     ("01", "锚点选款", "拆解畅销款三要素：原料等级 / 无 logo / 价格带", "qwen-vl 识别 + 对标库"),
-    ("02", "单轴演变", "改色 / 改细节 / 改廓形，锁 DNA 只动一个轴", "qwen-image 图生图 · 约 30 秒/张"),
+    ("02", "单轴演变", "改色 / 改细节 / 改廓形，锁 DNA 只动一个轴", "qwen-image 图生图 · 约 1–3 分钟/张"),
     ("03", "AI 出图", "白底/商拍/氛围/细节/面料/模特，一套 SKU 全类图覆盖", "qwen-image 图生图"),
     ("04", "企划组装", "参数条 + 双价格 + 开发日历 → 买手推介 deck", "exporter 自动编排"),
 ]
 
-TOOLCHAIN = "图生图 qwen-image-3.0-pro · 文生图 Seedream · 视频 Seedance · 锚点识别 qwen-vl-max"
+TOOLCHAIN = "图生图/文生图 qwen-image-3.0-pro · 锚点识别 qwen-vl-max"
 
 FALLBACK_PERSONAS = [
     {"name": "城市老钱", "desc": "沉稳、内敛、非凡成就", "need": "看得见的原料等级，看不见的 logo"},

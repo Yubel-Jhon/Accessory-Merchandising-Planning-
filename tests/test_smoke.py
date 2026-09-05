@@ -75,6 +75,22 @@ class BuildPromptTests(unittest.TestCase):
         p2 = build_prompt("studio", sku, "navy", "street", "山姆", style_hint="老钱风·大地色")
         self.assertNotIn("老钱风·大地色", p2)
 
+    def test_product_lock_and_quality_injection(self):
+        """画质①②：product 层有参考图注 PRODUCT_REF_LOCK；所有图型末尾注 QUALITY 画质词。"""
+        sku, _ = _lib_sku()
+        p = build_prompt("white_bg", sku, "oatmeal", "indoor", "山姆", has_ref=True)
+        self.assertIn("CRITICAL HIGHEST PRIORITY", p)   # 产品锁在最前
+        self.assertIn("shot on Sony A7R V", p)          # 画质词在末尾
+        # scene 层锁产品靠模板+SHARED_SUFFIX，不重复注产品锁，但画质词要注入
+        ps = build_prompt("studio", sku, "navy", "street", "山姆", has_ref=True, has_model=False)
+        self.assertNotIn("CRITICAL HIGHEST PRIORITY", ps)
+        self.assertIn("shot on Sony A7R V", ps)
+        # 无参考图（文生图兜底）不注产品锁，画质词仍注入
+        p0 = build_prompt("white_bg", sku, "oatmeal", "indoor", "山姆", has_ref=False)
+        self.assertNotIn("CRITICAL HIGHEST PRIORITY", p0)
+        self.assertIn("shot on Sony A7R V", p0)
+        _assert_no_leftover_placeholder(self, p)
+
 
 class MatchLibrarySkuTests(unittest.TestCase):
     def test_matches_by_zh_name(self):
