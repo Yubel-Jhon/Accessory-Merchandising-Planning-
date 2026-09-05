@@ -41,7 +41,7 @@
 
 1. **app.py（Streamlit）和 generate.py（批量 CLI）已归档（2026-09-05）**。要批量出图：给 server 加批量接口，复用 prompts.py，不复活旧脚本。
 2. **Prompt 内容只有两个家**：`data/image_types.json` 管通用模板（事实源），`prompts.py` 管特殊分支模板（model/detail/fabric 的 i2i 与兜底）+ 组装逻辑。禁止出现第三处 prompt 文案。
-3. **annotation（说明图）不是真图类型**：只存在于 exporter 的 TYPE_LABEL 里，前端轨道以 6 类为准。别给它加轨道节点。
+3. **说明图（annotation）已彻底移除（2026-09-05）**：它曾只活在 exporter 的 TYPE_LABEL 里，前端轨道一直是 6 类。以后要加新图类型，必须 data/image_types.json + core.TRANSFORMS + 前端轨道 + exporter 四处一起加，不许只加一处。
 4. 生图默认 `prompt_extend=False`（提速约 20 倍）；detail/fabric 必须走 crop_center 裁块 + 原图双参考（裁太大背景色会被织进面料，踩过坑）。
 5. dashscope 请求绕过系统代理（`qwen_client._OPENER`），全局代理常死。
 

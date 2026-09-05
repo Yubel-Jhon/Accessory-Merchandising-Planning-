@@ -41,10 +41,9 @@ TYPE_LABEL = {
     "lifestyle": "氛围图 · 场景代入",
     "detail": "细节图 · 品质论证",
     "fabric": "面料图 · 材料透明",
-    "annotation": "说明图 · 规格透明",
     "model": "模特图 · 上身效果",
 }
-LAYOUT_ORDER = ["white_bg", "detail", "fabric", "annotation", "studio", "lifestyle", "model"]
+LAYOUT_ORDER = ["white_bg", "detail", "fabric", "studio", "lifestyle", "model"]
 
 AXIS_LABEL = {"color": "改色", "detail": "改细节", "silhouette": "改廓形"}
 
@@ -561,7 +560,7 @@ def render_pptx(plan, out_path):
     text(0.9, 2.4, 11.5, 1.2, [("THANKS", 54, INK, True)], slide=s)
     text(0.9, 3.9, 11.5, 0.5, [("工具链：" + TOOLCHAIN, 13, GREY, False)], slide=s)
     text(0.9, 4.5, 11.5, 0.5, [(_timing_str(plan.get("timing")), 13, BROWN, False)], slide=s)
-    text(0.9, 6.7, 11.5, 0.4, [("商品企划 Agent · 面向山姆的服装配饰 B端企划", 11, GREY, False)], slide=s)
+    text(0.9, 6.7, 11.5, 0.4, [(f"商品企划 Agent · 面向{plan.get('retailer', '')}的服装配饰 B端企划", 11, GREY, False)], slide=s)
 
     prs.save(out_path)
     return out_path

@@ -6,7 +6,7 @@ compatible-mode 的 OpenAI 风格端点，图片走 base64 data URI 直传。
 按图里实际看到的内容输出：品类/材质/工艺/颜色/场景等中英文字段 + 一张图的拍摄类型。
 返回 dict：
 {
-  "image_type": 拍摄类型枚举（7 类之一，None 表示识别不到）,
+  "image_type": 拍摄类型枚举（6 类之一，None 表示识别不到）,
   "summary":    一句中文客观总结,
   "sku":        自由格式"款式"对象（字段对齐 build_prompt 的读取：en/material_en/craft_en/...）,
   "color_en"/"scene_en"/"color_zh"/"scene_zh": 颜色与场景中英文,
