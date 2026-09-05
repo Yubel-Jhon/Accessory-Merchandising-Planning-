@@ -52,9 +52,9 @@
     <details class="fold" id="foldWork" open>
       <summary>② 逐款出图 · <span id="workSkuTag">未选款</span> <span class="fold-tag" id="workTag"></span></summary>
       <div class="fold-body">
-        <section class="work-block" id="configPanel" hidden>
+        <section class="work-block">
           <h3>图类型轨道</h3>
-          <p class="hint">产品本身（锁产品，不要模特）＋ 场景 / 模特（需上传模特照片）。生成 → 看图 → 人工点选 1 张纳入本款。</p>
+          <p class="hint">点一个类型 → 生成 → 看图选 1 张。产品本身（白底/细节/面料）锁产品；场景/模特（商拍/氛围/模特）可带模特参考图。</p>
           <div class="track-group">
             <div class="track-label">产品本身</div>
             <div class="track product" id="trackProduct"></div>
@@ -69,8 +69,15 @@
               <span id="modelStatus" class="ref-upload-status"></span>
             </div>
           </div>
+        </section>
 
-          <h3>生成</h3>
+        <section class="work-block" id="selectedStrip" hidden>
+          <h3>本款已选</h3>
+          <div class="sel-strip" id="selStrip"></div>
+        </section>
+
+        <section class="work-block" id="configPanel" hidden>
+          <h3>生成 · <span id="genTypeLabel"></span></h3>
           <div class="ai-summary" id="aiSummary"></div>
           <div class="config-grid">
             <label>生图数量
@@ -106,8 +113,8 @@
         </section>
 
         <section class="work-block" id="variationPanel">
-          <h3>出相似款 · 畅销款演变</h3>
-          <p class="hint">用「① 起盘」选定的畅销款图作起点，选一个演变轴（改色/改细节/改廓形），锁住产品 DNA 只动这一个轴。</p>
+          <h3>出相似款 · 畅销款演变（可选）</h3>
+          <p class="hint">用「① 起盘」的畅销款图作起点，选一个演变轴（改色/改细节/改廓形），锁住产品 DNA 只动这一个轴。生成后自动归属本款，纳入企划盘时自动带上对比页。</p>
           <div class="config-grid var-config">
             <label>演变轴
               <select id="varAxis">
@@ -127,7 +134,10 @@
             <span class="arrow">→</span>
             <figure><img id="varAfter" alt="演变款"><figcaption id="varAfterCap">演变款</figcaption></figure>
           </div>
-          <button class="btn ghost block" id="btnVarIntoPlan" hidden>➕ 归纳进企划（导出时带上 before/after）</button>
+          <div class="var-actions" id="varActions" hidden>
+            <span class="hint">✅ 已归属本款，点「纳入企划盘」时自动带上这组对比</span>
+            <button class="btn ghost" id="btnVarDiscard">🗑 不带这组演变</button>
+          </div>
         </section>
 
         <button class="btn primary big" id="btnIntoPlan" disabled>✅ 本款完成 · 纳入企划盘</button>

@@ -33,6 +33,18 @@ h1,h2{font-family:Georgia,"Songti SC",serif;font-weight:500}
 .work-block h3{font-size:14px;color:var(--brown);margin-bottom:8px}
 .work-block:last-of-type{margin-bottom:8px}
 
+/* 本款已选：缩略条（一边做一边看的可视状态，可反悔删掉） */
+.sel-strip{display:flex;gap:10px;flex-wrap:wrap}
+.sel-item{position:relative;width:72px}
+.sel-item img{width:72px;height:72px;object-fit:cover;border-radius:6px;border:2px solid var(--brown);display:block}
+.sel-item .lab{font-size:11px;color:var(--brown);text-align:center;margin-top:3px}
+.sel-item .del{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;
+  border:1px solid var(--line);background:var(--card);color:var(--muted);font-size:11px;
+  line-height:1;cursor:pointer}
+.sel-item .del:hover{color:#a33;border-color:#a33}
+.var-actions{display:flex;align-items:center;gap:12px;margin:10px 0 4px}
+.var-actions .hint{margin:0;flex:1}
+
 /* 右侧总览板块 */
 .overview{position:sticky;top:86px}
 .overview-panel{margin-bottom:0}

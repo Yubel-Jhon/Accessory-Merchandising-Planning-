@@ -22,7 +22,7 @@ const state = {
   currentType: null,
   selected: {},        // 当前工作区：type -> url（纳入企划盘后清空）
   jobId: null, timer: null,
-  variation: null, variationInPlan: false,
+  variation: null,     // 本款演变记录（生成即归属本款，纳入企划盘时自动带上）
   varJobId: null, varTimer: null,
   recog: null,          // 客观识别结果（自由格式，不套用数据库）
   planSkus: [],         // 企划盘：[{ sku, colorZh, colorEn, direction, retailer, selected, variation }]
@@ -127,8 +127,32 @@ function renderSamples() {
 function renderConfig() {
   if (!state.currentType) { $("configPanel").hidden = true; return; }
   $("configPanel").hidden = false;
+  $("genTypeLabel").textContent = (TYPE_SHORT[state.currentType] || state.currentType) + "图";
   $("skuMeta").innerHTML = skuMetaHtml();
   renderAiSummary();
+}
+
+// 本款已选：工作区里已点选的图（一边做一边看的可视状态，可反悔删掉）
+function renderSelectedStrip() {
+  const strip = $("selStrip");
+  const wrap = $("selectedStrip");
+  if (!strip) return;
+  const types = ["white_bg", "studio", "lifestyle", "detail", "fabric", "model"]
+    .filter(t => state.selected[t]);
+  if (!types.length) { wrap.hidden = true; strip.innerHTML = ""; return; }
+  wrap.hidden = false;
+  strip.innerHTML = "";
+  for (const t of types) {
+    const item = document.createElement("div");
+    item.className = "sel-item";
+    item.innerHTML = `<img src="${state.selected[t]}"><div class="lab">${TYPE_SHORT[t]}图</div>` +
+      `<button class="del" title="移除这张">✕</button>`;
+    item.querySelector(".del").onclick = () => {
+      delete state.selected[t];
+      renderTrack(); renderSelectedStrip(); renderWorkState();
+    };
+    strip.appendChild(item);
+  }
 }
 
 function renderDirection() {
@@ -283,7 +307,8 @@ function selectVariant(url) {
   state.currentType = null;
   state.variants = [];
   $("resultPanel").hidden = true;
-  renderTrack(); renderWorkState();
+  $("configPanel").hidden = true;
+  renderTrack(); renderSelectedStrip(); renderWorkState();
 }
 
 // ---------- 生成（一边做一边看：生成 → 看图 → 人工点选） ----------
@@ -361,16 +386,20 @@ async function poll() {
 const VAR_AXIS_LABEL = { color: "改色", detail: "改细节", silhouette: "改廓形" };
 
 function renderVariationCompare(v) {
+  // 生成即归属本款：不需要单独的「归纳」开关，纳入企划盘时自动带上
   state.variation = v;
   $("varBefore").src = v.before;
   $("varAfter").src = v.after;
   $("varAfterCap").textContent = `演变款（${VAR_AXIS_LABEL[v.axis] || v.axis}${v.change ? "：" + v.change : ""}）`;
   $("varCompare").hidden = false;
-  state.variationInPlan = true;
-  const b = $("btnVarIntoPlan");
-  b.hidden = false;
-  b.className = "btn primary block";
-  b.textContent = "✅ 已归纳进企划（导出会带上 before/after）";
+  $("varActions").hidden = false;
+}
+
+function discardVariation() {
+  state.variation = null;
+  $("varCompare").hidden = true;
+  $("varActions").hidden = true;
+  $("varStatus").textContent = "已丢弃这组演变，可重新生成";
 }
 
 async function doVariation() {
@@ -438,14 +467,6 @@ async function pollVariation() {
   }
 }
 
-function toggleVarIntoPlan() {
-  if (!state.variation) return;
-  state.variationInPlan = !state.variationInPlan;
-  const b = $("btnVarIntoPlan");
-  b.className = state.variationInPlan ? "btn primary block" : "btn ghost block";
-  b.textContent = state.variationInPlan ? "✅ 已归纳进企划（导出会带上 before/after）" : "➕ 归纳进企划（导出时带上 before/after）";
-}
-
 // ---------- 企划盘：纳入 / 渲染 / 重开 / 移除 ----------
 function intoPlan() {
   if (Object.keys(state.selected).length === 0) return;
@@ -458,7 +479,7 @@ function intoPlan() {
     direction: $("direction").value,
     retailer: $("retailer").value,
     selected: { ...state.selected },
-    variation: state.variationInPlan && state.variation ? { ...state.variation } : null,
+    variation: state.variation ? { ...state.variation } : null,
   };
   const i = state.planSkus.findIndex(e => e.sku.name === entry.sku.name);
   if (i >= 0) state.planSkus[i] = entry; else state.planSkus.push(entry);
@@ -466,15 +487,15 @@ function intoPlan() {
   // 工作区清空，准备下一款（保留 风格/零售商/模特图/耗时累计）
   state.anchor = null; state.anchorType = "white_bg"; state.currentType = null;
   state.selected = {}; state.recog = null;
-  state.variation = null; state.variationInPlan = false;
+  state.variation = null;
   updateAnchorPreview(null);
   $("anchorStatus").textContent = "未选择产品图";
   $("anchorType").value = "white_bg";
   $("configPanel").hidden = true; $("resultPanel").hidden = true;
-  $("varCompare").hidden = true; $("btnVarIntoPlan").hidden = true; $("varStatus").textContent = "";
+  $("varCompare").hidden = true; $("varActions").hidden = true; $("varStatus").textContent = "";
   $("genStatus").textContent = "";
   $("foldPlan").open = true;
-  renderSamples(); renderTrack(); renderWorkState(); renderPlanSkus();
+  renderSamples(); renderTrack(); renderSelectedStrip(); renderWorkState(); renderPlanSkus();
 }
 
 function renderPlanSkus() {
@@ -525,13 +546,12 @@ function reopenSkuEntry(i) {
   state.selected = { ...e.selected };
   state.recog = null;
   state.variation = e.variation ? { ...e.variation } : null;
-  state.variationInPlan = !!e.variation;
   if (e.direction) $("direction").value = e.direction;
   renderSku();
   updateAnchorPreview(state.anchor);
   $("anchorStatus").innerHTML = `编辑中：<span class="ok">${escapeHtml(e.sku.name || "")}</span>（企划盘条目已取回）`;
   $("foldWork").open = true;
-  renderSamples(); renderTrack(); renderWorkState(); renderPlanSkus();
+  renderSamples(); renderTrack(); renderSelectedStrip(); renderWorkState(); renderPlanSkus();
   renderVariationCompareIfAny();
 }
 
@@ -644,12 +664,12 @@ function loadSample() {
   $("anchorStatus").innerHTML = `已选：<span class="ok">示例 · 山羊绒围巾（4 类图已就绪）</span>`;
   $("configPanel").hidden = true; $("resultPanel").hidden = true;
   $("foldWork").open = true;
-  renderSamples(); renderTrack(); renderWorkState();
+  renderSamples(); renderTrack(); renderSelectedStrip(); renderWorkState();
 }
 
 function reset() {
   Object.assign(state, { anchor: null, anchorType: "white_bg", model: null, currentType: null,
-    selected: {}, jobId: null, variants: [], variation: null, variationInPlan: false, recog: null,
+    selected: {}, jobId: null, variants: [], variation: null, recog: null,
     planSkus: [], timing: { evolve_sec: 0, images_sec: 0 } });
   updateAnchorPreview(null);
   const mp = $("modelPreview"); if (mp) { mp.src = ""; mp.hidden = true; }
@@ -659,8 +679,8 @@ function reset() {
   $("configPanel").hidden = true; $("resultPanel").hidden = true;
   $("previewFrame").hidden = true;
   $("exportRow").innerHTML = "";
-  $("varCompare").hidden = true; $("btnVarIntoPlan").hidden = true; $("varStatus").textContent = "";
-  renderSamples(); renderTrack(); renderWorkState(); renderPlanSkus();
+  $("varCompare").hidden = true; $("varActions").hidden = true; $("varStatus").textContent = "";
+  renderSamples(); renderTrack(); renderSelectedStrip(); renderWorkState(); renderPlanSkus();
 }
 
 // ---------- 绑定 & 启动 ----------
@@ -670,7 +690,7 @@ function init() {
   $("btnGenerate").onclick = generate;
   $("btnExport").onclick = doExport;
   $("btnVariation").onclick = doVariation;
-  $("btnVarIntoPlan").onclick = toggleVarIntoPlan;
+  $("btnVarDiscard").onclick = discardVariation;
   $("btnIntoPlan").onclick = intoPlan;
   $("direction").onchange = () => { renderSku(); renderConfig(); renderWorkState(); };
   $("sku").onchange = () => { renderColorScene(); $("skuMeta").innerHTML = skuMetaHtml(); };
