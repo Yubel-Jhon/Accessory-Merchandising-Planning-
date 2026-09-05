@@ -1,0 +1,211 @@
+{
+  "mvp_direction": "静奢/老钱风",
+  "directions": {
+    "静奢/老钱风": {
+      "anchor_sku": "299羊绒衫 / 5A桑蚕丝",
+      "tone": "松弛抓拍、自然光、黄金时刻、无logo、大地色、羊绒/真丝质感、effortless elegance",
+      "skus": [
+        {
+          "name": "山羊绒围巾", "en": "cashmere scarf",
+          "benchmark": "Loro Piana",
+          "material": "16.5um 小山羊绒", "material_en": "16.5 micron baby cashmere",
+          "craft": "12 针精纺", "craft_en": "12-gauge fine knit",
+          "detail_point_en": "fine knit stitch and hand-rolled fringe",
+          "weave_en": "tight twill cashmere weave",
+          "fiber_en": "16.5 micron baby cashmere fibers",
+          "fabric_type": "knit",
+          "persona_en": "urban middle-class professional, understated luxury",
+          "colors": [
+            {"zh": "驼色", "en": "camel"},
+            {"zh": "燕麦色", "en": "oatmeal"},
+            {"zh": "深灰", "en": "charcoal grey"},
+            {"zh": "奶油白", "en": "cream white"}
+          ],
+          "scenes": [
+            {"zh": "冬季通勤", "en": "winter city commute, wool coat, morning light"},
+            {"zh": "咖啡馆窗边", "en": "cozy cafe by the window, warm afternoon light"},
+            {"zh": "城市街拍", "en": "elegant city street, autumn golden hour"},
+            {"zh": "居家壁炉旁", "en": "home library by fireplace, soft warm light"}
+          ]
+        },
+        {
+          "name": "真丝方巾", "en": "silk square scarf",
+          "benchmark": "爱马仕",
+          "material": "5A 桑蚕丝", "material_en": "grade 5A mulberry silk",
+          "craft": "14 姆米 · 手工卷边", "craft_en": "14 momme, hand-rolled hem",
+          "detail_point_en": "hand-rolled silk hem and satin sheen",
+          "weave_en": "smooth satin silk weave",
+          "fiber_en": "long mulberry silk filaments",
+          "fabric_type": "print",
+          "persona_en": "refined lady, timeless elegance",
+          "colors": [
+            {"zh": "香槟金", "en": "champagne gold"},
+            {"zh": "雾霾蓝", "en": "muted blue"},
+            {"zh": "勃艮第红", "en": "burgundy"}
+          ],
+          "scenes": [
+            {"zh": "晚宴配饰", "en": "elegant dinner party, candlelight"},
+            {"zh": "城市通勤", "en": "city commute, tailored blazer"},
+            {"zh": "旅行度假", "en": "resort vacation, coastal light"}
+          ]
+        },
+        {
+          "name": "羊皮手套", "en": "lambskin leather gloves",
+          "benchmark": "Coach",
+          "material": "头层羊皮", "material_en": "full-grain lambskin leather",
+          "craft": "内里羊绒 · 手缝", "craft_en": "cashmere lining, hand-stitched",
+          "detail_point_en": "hand-stitched seam and soft leather grain",
+          "weave_en": "smooth full-grain leather surface",
+          "fiber_en": "supple lambskin leather",
+          "fabric_type": "leather",
+          "persona_en": "urban professional, classic taste",
+          "colors": [
+            {"zh": "黑色", "en": "black"},
+            {"zh": "酒红", "en": "oxblood"},
+            {"zh": "焦糖", "en": "caramel"}
+          ],
+          "scenes": [
+            {"zh": "都市通勤", "en": "city street, crisp winter morning"},
+            {"zh": "驾车场景", "en": "luxury car interior, soft daylight"}
+          ]
+        },
+        {
+          "name": "羊毛帽", "en": "merino wool beanie",
+          "benchmark": "The Row",
+          "material": "美利奴羊毛", "material_en": "extra-fine merino wool",
+          "craft": "无 logo · 极简", "craft_en": "minimal seamless knit",
+          "detail_point_en": "seamless ribbed knit texture",
+          "weave_en": "fine ribbed merino knit",
+          "fiber_en": "extra-fine merino wool fibers",
+          "fabric_type": "knit",
+          "persona_en": "minimalist, quiet luxury",
+          "colors": [
+            {"zh": "燕麦", "en": "oatmeal"},
+            {"zh": "深炭灰", "en": "dark charcoal"},
+            {"zh": "雾灰", "en": "muted grey"}
+          ],
+          "scenes": [
+            {"zh": "街头漫步", "en": "quiet city walk, overcast soft light"},
+            {"zh": "冬日周末", "en": "weekend outing, neutral outfit"}
+          ]
+        }
+      ]
+    },
+    "羽绒/户外保暖": {
+      "anchor_sku": "499元400g羽绒服",
+      "tone": "充绒量可视化、防风面料、极地保暖、机能感",
+      "skus": [
+        {
+          "name": "羽绒帽", "en": "down-filled hat",
+          "benchmark": "加拿大鹅",
+          "material": "90% 白鹅绒", "material_en": "90% white goose down",
+          "craft": "充绒 30g · 防风面料", "craft_en": "30g fill, windproof shell",
+          "detail_point_en": "quilted down chambers and windproof shell",
+          "weave_en": "ripstop windproof nylon",
+          "fiber_en": "white goose down clusters",
+          "fabric_type": "down",
+          "persona_en": "outdoor enthusiast, cold climate",
+          "colors": [{"zh": "黑色", "en": "black"}, {"zh": "军绿", "en": "olive"}],
+          "scenes": [{"zh": "极地户外", "en": "snowy outdoor, crisp air"}, {"zh": "雪地徒步", "en": "snow trail, bright winter light"}]
+        },
+        {
+          "name": "羽绒手套", "en": "down mittens",
+          "benchmark": "Moncler",
+          "material": "90% 鹅绒", "material_en": "90% goose down",
+          "craft": "触屏指 · 抓绒内里", "craft_en": "touchscreen fingertip, fleece lining",
+          "detail_point_en": "touchscreen fingertip and fleece lining",
+          "weave_en": "quilted down shell",
+          "fiber_en": "goose down clusters",
+          "fabric_type": "down",
+          "persona_en": "urban winter commuter",
+          "colors": [{"zh": "黑", "en": "black"}, {"zh": "银灰", "en": "silver grey"}],
+          "scenes": [{"zh": "城市寒冬", "en": "city winter, cold morning"}, {"zh": "滑雪场", "en": "ski resort, alpine light"}]
+        },
+        {
+          "name": "脖套围巾", "en": "down neck gaiter",
+          "benchmark": "波司登",
+          "material": "白鹅绒", "material_en": "white goose down",
+          "craft": "充绒量可视化 · 立领防风", "craft_en": "visible fill weight, stand collar",
+          "detail_point_en": "visible down fill and stand collar",
+          "weave_en": "quilted down tubes",
+          "fiber_en": "white goose down",
+          "fabric_type": "down",
+          "persona_en": "winter commuter",
+          "colors": [{"zh": "藏青", "en": "navy"}, {"zh": "黑", "en": "black"}],
+          "scenes": [{"zh": "通勤防风", "en": "windy commute, overcast"}, {"zh": "雪天户外", "en": "snowy day, soft light"}]
+        },
+        {
+          "name": "保暖袜", "en": "thermal socks",
+          "benchmark": "Smartwool",
+          "material": "美利奴羊毛", "material_en": "merino wool",
+          "craft": "户外级", "craft_en": "outdoor grade cushioning",
+          "detail_point_en": "cushioned sole and ribbed cuff",
+          "weave_en": "dense merino knit",
+          "fiber_en": "merino wool fibers",
+          "fabric_type": "knit",
+          "persona_en": "outdoor hiker",
+          "colors": [{"zh": "灰", "en": "grey"}, {"zh": "棕", "en": "brown"}],
+          "scenes": [{"zh": "户外徒步", "en": "mountain trail, crisp air"}, {"zh": "居家保暖", "en": "cozy home, warm light"}]
+        }
+      ]
+    },
+    "轻运动/瑜伽": {
+      "anchor_sku": "瑜伽裤(lulu平替)",
+      "tone": "运动时尚、面料科技、雾面质感、动态抓拍",
+      "skus": [
+        {
+          "name": "运动袜", "en": "athletic socks",
+          "benchmark": "Bombas",
+          "material": "吸湿排汗纤维", "material_en": "moisture-wicking fiber",
+          "craft": "足弓支撑", "craft_en": "arch support compression",
+          "detail_point_en": "arch support band and breathable knit",
+          "weave_en": "technical athletic knit",
+          "fiber_en": "moisture-wicking fibers",
+          "fabric_type": "knit",
+          "persona_en": "active gym goer",
+          "colors": [{"zh": "白", "en": "white"}, {"zh": "黑", "en": "black"}],
+          "scenes": [{"zh": "健身房", "en": "gym, bright clean light"}, {"zh": "晨跑", "en": "morning run, soft sunrise light"}]
+        },
+        {
+          "name": "发带", "en": "sports headband",
+          "benchmark": "lululemon",
+          "material": "吸汗面料", "material_en": "sweat-wicking fabric",
+          "craft": "防滑硅胶条", "craft_en": "anti-slip silicone strip",
+          "detail_point_en": "anti-slip silicone strip and soft fabric",
+          "weave_en": "stretch athletic knit",
+          "fiber_en": "sweat-wicking fibers",
+          "fabric_type": "knit",
+          "persona_en": "yoga / fitness lover",
+          "colors": [{"zh": "雾粉", "en": "dusty pink"}, {"zh": "黑", "en": "black"}],
+          "scenes": [{"zh": "瑜伽室", "en": "yoga studio, calm light"}, {"zh": "户外运动", "en": "outdoor workout, daylight"}]
+        },
+        {
+          "name": "瑜伽垫", "en": "yoga mat",
+          "benchmark": "Manduka",
+          "material": "防滑 TPE", "material_en": "non-slip TPE",
+          "craft": "6mm 厚 · 轻量", "craft_en": "6mm thick, lightweight",
+          "detail_point_en": "non-slip textured surface and dense foam",
+          "weave_en": "textured non-slip surface",
+          "fiber_en": "dense TPE foam",
+          "fabric_type": "texture",
+          "persona_en": "yoga practitioner",
+          "colors": [{"zh": "灰绿", "en": "sage green"}, {"zh": "紫", "en": "violet"}],
+          "scenes": [{"zh": "瑜伽室", "en": "yoga studio, serene light"}, {"zh": "居家练习", "en": "home practice, natural light"}]
+        },
+        {
+          "name": "防晒配件", "en": "UV protection arm sleeves",
+          "benchmark": "蕉下",
+          "material": "冰感面料", "material_en": "ice-cooling fabric",
+          "craft": "UPF100+", "craft_en": "UPF100+ protection",
+          "detail_point_en": "cooling fabric and UV protection tag",
+          "weave_en": "cooling technical knit",
+          "fiber_en": "ice-cooling fibers",
+          "fabric_type": "knit",
+          "persona_en": "outdoor runner",
+          "colors": [{"zh": "冰蓝", "en": "ice blue"}, {"zh": "白", "en": "white"}],
+          "scenes": [{"zh": "户外跑步", "en": "outdoor run, sunny day"}, {"zh": "骑行", "en": "cycling, bright daylight"}]
+        }
+      ]
+    }
+  }
+}

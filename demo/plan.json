@@ -1,0 +1,28 @@
+{
+  "product": {
+    "category": "山羊绒围巾",
+    "material": "16.5um 小山羊绒",
+    "craft": "12 针精纺",
+    "color": "驼色",
+    "price_band": "¥299–499（山姆会员价）",
+    "benchmark": "Loro Piana 平替"
+  },
+  "direction": "静奢/老钱风",
+  "retailer": "山姆",
+  "selection_logic": {
+    "对标": "Loro Piana 山羊绒围巾（专柜 ¥6000+）。取它「无 logo + 大地色 + 羊绒质感」的视觉语言，砍到 1/10 价格带。",
+    "人群": "山姆会员 = 中产家庭、追求「体面的性价比」的人。他们不是买不起大牌，是不愿意为 logo 溢价买单，要的是「看不见的奢侈」——原料等级 + 工艺。",
+    "价格带": "¥299–499。山姆已验证的锚点（299 羊绒衫、499 羽绒服）证明会员对「原料级商品」在这个价格带无心理障碍。围巾是同一「静奢原料」的延展 SKU。",
+    "差异化": "① 参数透明——把 16.5um（比常规 19um 更细更软）、12 针精纺直接标在图里，用原料等级背书，而不是讲故事；② 无 logo 静奢——像 Loro Piana 一样让质感自己说话；③ 山姆风格后缀——大地色 + 暖棚光 + 会员店质感，和京东/BigOffs 的调性区分开。",
+    "山姆锚点": "复用「299 羊绒衫 / 5A 桑蚕丝」已验证的爆款逻辑：把「大牌原料」翻译成「可量化的参数卖点」，用价格/参数两张牌同时打。",
+    "风险": "避免 logo 侵权（对标而非仿制）、避免运动赛道（lululemon 起诉 Costco 侵权红线），故静奢围巾是三个方向里最安全的 MVP 切口。"
+  },
+  "images": {
+    "lifestyle": "images/lifestyle.jpg",
+    "studio": "images/studio.jpg",
+    "white_bg": "images/white_bg.jpg",
+    "detail": "images/detail.jpg"
+  },
+  "layout": ["lifestyle", "studio", "white_bg", "detail"],
+  "export": ["HTML", "PPT"]
+}

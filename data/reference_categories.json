@@ -1,0 +1,48 @@
+{
+  "rule": "参考图按类别归档，生成哪类输出图就用哪类参考图，类别不串。产品一致性由白底锚点图锁定，风格由对应类别的品牌参考图锁定。",
+  "reference_categories": [
+    {
+      "id": "white_bg_product",
+      "name": "白底产品图（无模特）",
+      "用途": "锁产品一致性 + 白底/商拍/说明图的锚点",
+      "图源": "品牌/电商白底产品图，或已生成的白底锚点图",
+      "status": "已有 images/white_bg.jpg"
+    },
+    {
+      "id": "on_model_white",
+      "name": "白底模特商拍图（模特上身 + 白底/浅灰底）",
+      "用途": "生成 model 模特上身图、lifestyle 氛围图时的风格+姿态参考",
+      "图源": "AI 生成优衣库风格白底模特商拍图（电商真实图反爬拿不到）",
+      "status": "已有 images/references/on_model_white/uniqlo-style-model.jpg"
+    },
+    {
+      "id": "lifestyle_campaign",
+      "name": "氛围生活大片（品牌 campaign）",
+      "用途": "lifestyle 氛围图的氛围/光线/色调参考",
+      "图源": "品牌 campaign 图（theimpression 等媒体站）",
+      "status": "已有 images/references/lp-1.jpg ~ lp-3.jpg（Loro Piana Holiday 2025）"
+    },
+    {
+      "id": "detail_macro",
+      "name": "工艺细节特写",
+      "用途": "生成 detail 细节图的参考",
+      "图源": "品牌工艺/缝线/边角细节图",
+      "status": "待补"
+    },
+    {
+      "id": "fabric_macro",
+      "name": "面料纹理特写",
+      "用途": "生成 fabric 面料结构图的参考",
+      "图源": "面料纹理/织法特写图",
+      "status": "待补"
+    }
+  ],
+  "image_type_to_reference": {
+    "white_bg":  ["white_bg_product"],
+    "studio":    ["white_bg_product"],
+    "lifestyle": ["on_model_white", "lifestyle_campaign"],
+    "model":     ["on_model_white"],
+    "detail":    ["detail_macro", "white_bg_product"],
+    "fabric":    ["fabric_macro", "white_bg_product"]
+  }
+}

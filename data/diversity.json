@@ -1,0 +1,10 @@
+{
+  "note": "模特人种多样性清单 + 统一调性后缀。用户列的「外国人」归入「白人」（口语里外国人默认指欧美白人），如需中东/拉丁裔/东南亚再补。",
+  "ethnicities": [
+    { "id": "east_asian", "label": "中国人", "prompt": "East Asian / Chinese" },
+    { "id": "caucasian", "label": "白人", "prompt": "Caucasian / White European" },
+    { "id": "black", "label": "黑人", "prompt": "Black / African descent" },
+    { "id": "south_asian", "label": "印度人", "prompt": "South Asian / Indian" }
+  ],
+  "tone_suffix": "quiet luxury / old money aesthetic: effortless elegance, relaxed candid pose, warm golden-hour natural light, earth-tone palette, no visible logo, soft cashmere texture, understated luxury, authentic atmosphere"
+}

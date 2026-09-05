@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+
+# 运行日志
+server.log
+
+# 生成产物（运行时产生，不入库）
+images/output/
+images/upload/
+images/models/
+demo/output/
+
+# 本地杂项
+*.log
+.DS_Store
+
+# 密钥文件，永不入库
+.env

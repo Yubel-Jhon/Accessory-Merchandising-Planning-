@@ -1,0 +1,63 @@
+{
+  "shared_suffix": "photorealistic, ultra-high definition, 8K resolution, commercial photography quality, sharp details, professional lighting. CRITICAL: keep the product EXACTLY the same — same structure, same proportions, same color, do not modify any design detail.",
+  "image_types": {
+    "white_bg": {
+      "name": "白底正面图",
+      "role": "产品身份证，最干净锚点",
+      "layer": "product",
+      "prompt_template": "{product}, displayed centered on pure white background (RGB 255,255,255), product occupies 90% of frame, front view or slight 45-degree angle, clean studio lighting with very subtle natural shadow underneath, no props, no decorations, no text, no watermark",
+      "provider": "seedream",
+      "needs_rembg": true,
+      "aspect_ratio": "1:1",
+      "note": "走「生图 + rembg 抠图合成」两段式，别一步生成"
+    },
+    "studio": {
+      "name": "商拍图",
+      "role": "产品定调（质感/档次）",
+      "layer": "scene",
+      "prompt_template": "professional studio product photography, model wearing {product}, keep the product IDENTICAL to the reference image, softbox key light + rim light, {material} texture visible, clean neutral seamless background, shallow depth of field",
+      "provider": "seedream",
+      "needs_rembg": false,
+      "aspect_ratio": "4:5"
+    },
+    "lifestyle": {
+      "name": "氛围图",
+      "role": "场景代入（卖给谁/什么场景）",
+      "layer": "scene",
+      "prompt_template": "lifestyle photo, model wearing {product} in {scene}, {persona}, natural light, shallow depth of field, product in focus, authentic atmosphere, scene-appropriate props",
+      "provider": "seedream",
+      "needs_rembg": false,
+      "aspect_ratio": "16:9"
+    },
+    "detail": {
+      "name": "细节图",
+      "role": "品质论证（材质/工艺）",
+      "layer": "product",
+      "prompt_template": "macro photography, extreme close-up of {detail_point} on {product}, directional side lighting highlighting {material} texture and {craft}, fill the frame with the detail, shallow depth of field, soft bokeh background",
+      "provider": "seedream",
+      "needs_rembg": false,
+      "aspect_ratio": "1:1",
+      "note": "优先图生图/局部重绘，别文生图凭空造纹理"
+    },
+    "fabric": {
+      "name": "面料结构图",
+      "role": "材料透明（纹理/结构）",
+      "layer": "product",
+      "prompt_template": null,
+      "provider": "seedream",
+      "needs_rembg": false,
+      "aspect_ratio": "1:1",
+      "note": "模板按 sku.fabric_type 分 5 支（knit/print/leather/down/texture），见 prompts.FABRIC_TEMPLATES"
+    },
+    "model": {
+      "name": "模特上身图",
+      "role": "上身效果",
+      "layer": "scene",
+      "prompt_template": null,
+      "provider": "vton",
+      "needs_vton": true,
+      "aspect_ratio": "3:4",
+      "note": "虚拟试穿 IDM-VTON/CatVTON，后置"
+    }
+  }
+}

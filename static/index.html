@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>商品企划生成 Agent</title>
+<link rel="stylesheet" href="/file/static/style.css">
+</head>
+<body>
+<div id="apiHealth" class="api-banner" hidden></div>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">🧣</span>
+    <div>
+      <h1>商品企划生成 Agent</h1>
+      <p class="sub">上传/选一张产品图 → 点选图类型轨道 → 生成变体选图 → 自动出「选品逻辑 + 编排」→ 导出</p>
+    </div>
+  </div>
+  <div class="top-actions">
+    <button class="btn ghost" id="btnSample">🚀 载入示例（山羊绒围巾）</button>
+    <button class="btn primary" id="btnExport" disabled>📦 导出企划</button>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- 左栏：选图 -->
+  <aside class="left">
+    <section class="panel">
+      <h2>① 起盘 · 选产品图</h2>
+      <div class="upload-zone" id="uploadZone">
+        <span>＋ 上传产品图</span>
+      </div>
+      <input type="file" id="fileInput" accept="image/*" style="display:none">
+      <img id="anchorPreview" class="anchor-preview" alt="产品图预览" hidden>
+      <div class="gallery" id="sampleGallery"></div>
+      <div class="anchor-status" id="anchorStatus">未选择产品图</div>
+      <button class="btn ghost block" id="btnRecognize">🔍 重新识别风格/款式</button>
+      <label class="mini-label">识别为图类型
+        <select id="anchorType"></select>
+      </label>
+    </section>
+
+    <section class="panel">
+      <h2>企划状态</h2>
+      <ul id="planStatus" class="status-list"></ul>
+      <button class="btn ghost block" id="btnReset">🗑 清空重来</button>
+    </section>
+  </aside>
+
+  <!-- 右栏：轨道 + 下拉 + 结果 -->
+  <main class="main">
+    <section class="panel">
+      <h2>② 图类型轨道</h2>
+      <p class="hint">产品本身（锁产品，不要模特）＋ 场景 / 模特（需上传模特照片）</p>
+      <div class="track-group">
+        <div class="track-label">产品本身</div>
+        <div class="track product" id="trackProduct"></div>
+      </div>
+      <div class="track-group">
+        <div class="track-label">场景 / 模特</div>
+        <div class="track scene" id="trackScene"></div>
+        <div class="model-upload">
+          <button class="btn ghost" id="btnUploadModel">＋ 上传模特照片</button>
+          <input type="file" id="modelFileInput" accept="image/*" style="display:none">
+          <img id="modelPreview" class="model-preview" alt="模特预览" hidden>
+          <span id="modelStatus" class="ref-upload-status"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="configPanel" hidden>
+      <h2>③ 生成（AI 已自动识别）</h2>
+      <div class="ai-summary" id="aiSummary"></div>
+      <div class="config-grid">
+        <label>生图数量
+          <select id="count">
+            <option value="1" selected>1 张</option>
+            <option value="2">2 张</option>
+            <option value="3">3 张</option>
+          </select>
+        </label>
+      </div>
+      <details class="manual-toggle">
+        <summary>手动调整（识别不准时点开）</summary>
+        <div class="config-grid">
+          <label>风格
+            <select id="direction"></select>
+          </label>
+          <label>款式
+            <select id="sku"></select>
+          </label>
+          <label>颜色
+            <select id="color"></select>
+          </label>
+          <label>场景
+            <select id="scene"></select>
+          </label>
+          <label>零售商
+            <select id="retailer"></select>
+          </label>
+        </div>
+      </details>
+      <div class="sku-meta" id="skuMeta"></div>
+      <button class="btn primary big" id="btnGenerate">🎨 生成这张图</button>
+      <div class="gen-status" id="genStatus"></div>
+    </section>
+
+    <section class="panel" id="resultPanel" hidden>
+      <h2>④ 结果区 · 点选 1 张纳入企划</h2>
+      <div class="gallery large" id="variantGallery"></div>
+    </section>
+
+    <section class="panel" id="variationPanel">
+      <h2>⑤ 出相似款 · 畅销款演变</h2>
+      <p class="hint">用「① 起盘」选定的畅销款图作起点，选一个演变轴（改色/改细节/改廓形），锁住产品 DNA 只动这一个轴，生成相似款概念图。</p>
+      <div class="config-grid var-config">
+        <label>演变轴
+          <select id="varAxis">
+            <option value="color">改色</option>
+            <option value="detail">改细节</option>
+            <option value="silhouette">改廓形</option>
+          </select>
+        </label>
+        <label>改动描述
+          <input id="varChange" type="text" placeholder="例如：燕麦色改炭灰">
+        </label>
+      </div>
+      <button class="btn primary big" id="btnVariation">🪄 生成相似款演变图</button>
+      <div class="gen-status" id="varStatus"></div>
+      <div class="compare" id="varCompare" hidden>
+        <figure><img id="varBefore" alt="畅销款"><figcaption>畅销款（起点）</figcaption></figure>
+        <span class="arrow">→</span>
+        <figure><img id="varAfter" alt="演变款"><figcaption id="varAfterCap">演变款</figcaption></figure>
+      </div>
+      <button class="btn ghost block" id="btnVarIntoPlan" hidden>➕ 归纳进企划（导出时带上 before/after）</button>
+    </section>
+
+    <section class="panel" id="exportPanel" hidden>
+      <h2>⑥ 导出</h2>
+      <div class="export-row" id="exportRow"></div>
+      <iframe id="previewFrame" class="preview" hidden></iframe>
+    </section>
+  </main>
+</div>
+
+<script src="/file/static/app.js"></script>
+</body>
+</html>
